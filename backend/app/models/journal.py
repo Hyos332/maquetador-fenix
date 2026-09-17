@@ -23,5 +23,6 @@ class JournalConfig(BaseModel):
     url: str
     issn: str
     logo: str
+    logo_source_url: str | None = None
     image_style: ImageStyle
     source_path: Path | None = None

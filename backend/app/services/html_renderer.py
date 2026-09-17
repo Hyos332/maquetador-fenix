@@ -53,8 +53,8 @@ class IntermediateHtmlRenderer:
                             <a target="_blank" href="{escape(journal.url)}">{escape(journal.url)}</a>
                             <p>ISSN: {escape(journal.issn)}</p>
                         </td>
-                        <td>
-                            <img src="{escape(journal.logo)}" style="width: 200px!important">
+                        <td class="logo-cell">
+                            <img class="journal-logo" src="{escape(journal.logo)}" style="width: 200px!important">
                         </td>
                     </tr>
                 </tbody>

@@ -4,6 +4,7 @@ publisher: "Multi Lingual Scientific Journals"
 url: "https://www.mlsjournals.com/MLS-Health-Nutrition"
 issn: "2952-2471"
 logo: "logo-mlshn.svg"
+logo_source_url: "https://www.mlsjournals.com/public/journals/3/pageHeaderLogoImage_es.svg"
 image_style:
   max_width_px: 700
   max_height_px: 600

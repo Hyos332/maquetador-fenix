@@ -4,6 +4,7 @@ publisher: "Multi Lingual Scientific Journals"
 url: "https://www.mlsjournals.com/Educational-Research-Journal"
 issn: "2603-5820"
 logo: "logo-mlser.svg"
+logo_source_url: "https://www.mlsjournals.com/public/journals/1/pageHeaderLogoImage_es.svg"
 image_style:
   max_width_px: 700
   max_height_px: 600

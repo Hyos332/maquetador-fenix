@@ -1,4 +1,4 @@
-import { Download, ExternalLink, FileText, FolderOpen, Send } from "lucide-react";
+import { Download, FileText, FolderOpen, Send } from "lucide-react";
 import { useEffect, useState } from "react";
 import { resolveApiUrl, updateAbstracts } from "../services/api";
 import type { CreateJobResponse, JobStatusResponse } from "../types/pipeline";
@@ -30,8 +30,6 @@ export function ResultPanel({ job, onReviewStarted }: ResultPanelProps) {
   }
 
   const htmlUrl = job.html_url ? resolveApiUrl(job.html_url) : null;
-  const epubUrl = job.epub_url ? resolveApiUrl(job.epub_url) : null;
-  const deliveryUrl = job.delivery_url ? resolveApiUrl(job.delivery_url) : null;
   const deliveryArchiveUrl = job.delivery_archive_url ? resolveApiUrl(job.delivery_archive_url) : null;
   const jobId = job.job_id;
   const abstractReview = getAbstractReviewState(job, abstractEs, abstractEn);
@@ -143,28 +141,10 @@ export function ResultPanel({ job, onReviewStarted }: ResultPanelProps) {
       ) : null}
 
       <div className="result-actions">
-        {htmlUrl ? (
-          <a className="button button--secondary" href={htmlUrl} target="_blank" rel="noreferrer">
-            <ExternalLink size={17} />
-            Ver HTML
-          </a>
-        ) : null}
         {deliveryArchiveUrl ? (
           <a className="button button--primary" href={deliveryArchiveUrl}>
-            <FolderOpen size={17} />
-            Descargar carpeta completa
-          </a>
-        ) : null}
-        {deliveryUrl ? (
-          <a className="button button--secondary" href={deliveryUrl} target="_blank" rel="noreferrer">
-            <ExternalLink size={17} />
-            Ver archivos
-          </a>
-        ) : null}
-        {epubUrl ? (
-          <a className="button button--secondary" href={epubUrl}>
             <Download size={17} />
-            Descargar EPUB
+            Descargar carpeta completa
           </a>
         ) : null}
       </div>

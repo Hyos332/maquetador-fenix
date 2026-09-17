@@ -3,6 +3,8 @@ from __future__ import annotations
 import shutil
 from collections.abc import Callable
 from pathlib import Path
+from urllib.error import URLError
+from urllib.request import urlopen
 
 from app.config.settings import Settings, settings
 from app.models.pipeline import PipelineResult, PipelineStatus
@@ -168,7 +170,18 @@ class ArticlePipeline:
         if logo_files:
             shutil.copy2(logo_files[0], output_dir / logo_files[0].name)
         elif not (output_dir / journal.logo).exists():
-            (output_dir / journal.logo).write_text(_default_logo_svg(journal.name), encoding="utf-8")
+            self._write_journal_logo(output_dir / journal.logo, journal)
+
+    def _write_journal_logo(self, output_path: Path, journal) -> None:
+        if journal.logo_source_url:
+            try:
+                with urlopen(journal.logo_source_url, timeout=8) as response:
+                    output_path.write_bytes(response.read())
+                    return
+            except (OSError, URLError, TimeoutError):
+                pass
+
+        output_path.write_text(_default_logo_svg(journal.name), encoding="utf-8")
 
     def _notify(
         self,
@@ -191,13 +204,25 @@ h1,h2,h3,h4{
 table.header-table{
     border-collapse: collapse;
     text-align: center;
+    table-layout: fixed;
+    width: 100%;
 }
 table.header-table td{
     border: 2px solid #0B8BC9;
     padding:7px;
+    vertical-align: middle;
 }
 table.header-table td.info{
-    width: 90vw;
+    width: 78%;
+}
+table.header-table td.logo-cell{
+    width: 22%;
+}
+table.header-table img.journal-logo{
+    display: block;
+    height: auto;
+    margin: 0 auto;
+    max-width: 200px;
 }
 table{
     width: 100%;
