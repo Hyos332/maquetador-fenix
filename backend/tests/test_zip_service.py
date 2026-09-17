@@ -7,6 +7,7 @@ from app.exceptions import DocumentNotFoundError, ZipValidationError
 from app.services.zip_service import ZipService
 
 ALBERTO_FIXTURE = Path("/home/luis.hoyos@ctdesarrollo-sdr.org/Descargas/Alberto Nilson.zip")
+ANTONIO_DOCX_FIXTURE = Path("/home/luis.hoyos@ctdesarrollo-sdr.org/Descargas/Antonio Abarca_Eng.docx")
 
 
 @pytest.mark.skipif(not ALBERTO_FIXTURE.exists(), reason="Alberto fixture ZIP is not available")
@@ -21,6 +22,18 @@ def test_extract_article_zip_creates_workspace_and_detects_expected_files(tmp_pa
     assert len(package.pdf_files) == 1
     assert [path.name for path in package.css_files] == ["galleys.css"]
     assert [path.name for path in package.logo_files] == ["logo-mlshn.svg"]
+
+
+@pytest.mark.skipif(not ANTONIO_DOCX_FIXTURE.exists(), reason="Antonio DOCX fixture is not available")
+def test_extract_article_docx_creates_workspace_without_zip(tmp_path: Path) -> None:
+    package = ZipService(tmp_path).extract_article_package(ANTONIO_DOCX_FIXTURE, job_id="fixture-antonio")
+
+    assert package.workspace.root == tmp_path / "fixture-antonio"
+    assert package.primary_docx.name == "Antonio Abarca_Eng.docx"
+    assert len(package.docx_files) == 1
+    assert package.pdf_files == []
+    assert package.css_files == []
+    assert package.logo_files == []
 
 
 def test_extract_article_zip_rejects_zip_slip(tmp_path: Path) -> None:

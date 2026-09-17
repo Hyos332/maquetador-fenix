@@ -61,3 +61,8 @@ def test_pipeline_generates_valid_postprocessed_html(tmp_path: Path) -> None:
     figure_sources = [Path(image.get("src")).name for image in root.xpath("//img[@src]")]
     assert "Figure_1.PNG" in figure_sources
     assert not root.xpath("//img[starts-with(@src, 'data:image/')]")
+
+    rendered_html = result.html_path.read_text(encoding="utf-8")
+    references_index = rendered_html.index('<p class="title">Referencias</p>')
+    assert rendered_html.index("Figure_1.PNG") < references_index
+    assert rendered_html.index("Figure_7.PNG") < references_index
