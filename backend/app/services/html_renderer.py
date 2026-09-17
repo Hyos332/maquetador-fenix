@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import re
 from html import escape
 from pathlib import Path
 
-from app.models.article import Article, Reference
+from app.models.article import Article, Figure, Reference
 from app.models.journal import JournalConfig
 from app.utils.dates import format_short_spanish_date
 from app.utils.files import ensure_directory
+
+FIGURE_PLACEHOLDER_PATTERN = re.compile(r"<!--\s*FIGURE:(\d+)\s*-->")
 
 
 class IntermediateHtmlRenderer:
@@ -20,8 +23,11 @@ class IntermediateHtmlRenderer:
     def render(self, article: Article, journal: JournalConfig) -> str:
         title = article.primary_title
         author_html = "\n".join(self._render_author(author) for author in article.authors)
-        figures_html = "\n".join(self._render_figure(figure, journal) for figure in article.figures)
-        sections_html = "\n".join(self._render_section(section.title, section.html_content) for section in article.sections)
+        figures_by_number = {figure.number: figure for figure in article.figures}
+        sections_html = "\n".join(
+            self._render_section(section.title, section.html_content, figures_by_number, journal)
+            for section in article.sections
+        )
         references_html = "\n".join(self._render_reference(reference) for reference in article.references)
         citation_html = self._render_citation(article, journal)
         title_en_html = self._render_translated_title(article.title_en)
@@ -70,7 +76,6 @@ class IntermediateHtmlRenderer:
     {abstract_en_html}
     <hr>
     {sections_html}
-    {figures_html}
     <div>
         <p class="title">Referencias</p>
         {references_html}
@@ -104,7 +109,14 @@ class IntermediateHtmlRenderer:
             "</p>"
         )
 
-    def _render_section(self, title: str, html_content: str) -> str:
+    def _render_section(
+        self,
+        title: str,
+        html_content: str,
+        figures_by_number: dict[int, Figure],
+        journal: JournalConfig,
+    ) -> str:
+        html_content = self._replace_figure_placeholders(html_content, figures_by_number, journal)
         return f'<div>\n<p class="title">{escape(title)}</p>\n{html_content}\n</div>'
 
     def _render_figure(self, figure, journal: JournalConfig) -> str:
@@ -119,6 +131,20 @@ class IntermediateHtmlRenderer:
 
     def _render_reference(self, reference: Reference) -> str:
         return f'<p id="ref-{reference.number}">[{reference.number}] {escape(reference.raw_text)}</p>'
+
+    def _replace_figure_placeholders(
+        self,
+        html_content: str,
+        figures_by_number: dict[int, Figure],
+        journal: JournalConfig,
+    ) -> str:
+        def replace(match: re.Match[str]) -> str:
+            figure = figures_by_number.get(int(match.group(1)))
+            if not figure:
+                return ""
+            return self._render_figure(figure, journal)
+
+        return FIGURE_PLACEHOLDER_PATTERN.sub(replace, html_content)
 
     def _render_dates(self, article: Article) -> str:
         return (

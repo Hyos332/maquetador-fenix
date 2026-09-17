@@ -54,15 +54,13 @@ class ArticlePipeline:
         self._apply_abstract_overrides(article, abstract_overrides)
         self._notify(progress, PipelineStatus.METADATA_EXTRACTED, "Metadatos extraídos.")
 
-        article.sections = self.section_extractor.extract(parsed)
-        article.references = self.reference_processor.extract(parsed)
-
         image_result = self.image_extractor.extract_figures(
             parsed,
             output_dir=package.workspace.generated_dir,
         )
         article.figures = image_result.figures
-        self._copy_input_assets(package.css_files, package.logo_files, package.workspace.generated_dir)
+        article.sections = self.section_extractor.extract(parsed, figures=article.figures)
+        article.references = self.reference_processor.extract(parsed)
 
         warnings = []
         warnings.extend(self.reference_processor.sequence_warnings(article.references))
@@ -70,6 +68,7 @@ class ArticlePipeline:
         warnings.extend(self._abstract_warnings(article.abstract_es, "Resumen"))
         warnings.extend(self._abstract_warnings(article.abstract_en, "Abstract"))
         journal = self.journal_config_service.load(article.journal)
+        self._copy_input_assets(package.css_files, package.logo_files, package.workspace.generated_dir, journal)
 
         source_html = package.workspace.generated_dir / "01_intermediate.html"
         final_html = package.workspace.generated_dir / "02_postprocessed.html"
@@ -150,17 +149,25 @@ class ArticlePipeline:
         if "abstract_en" in abstract_overrides:
             article.abstract_en = abstract_overrides["abstract_en"].strip()
 
-    def _copy_input_assets(self, css_files: list[Path], logo_files: list[Path], output_dir: Path) -> None:
+    def _copy_input_assets(
+        self,
+        css_files: list[Path],
+        logo_files: list[Path],
+        output_dir: Path,
+        journal,
+    ) -> None:
         if css_files:
             shutil.copy2(css_files[0], output_dir / "galleys.css")
         elif not (output_dir / "galleys.css").exists():
             (output_dir / "galleys.css").write_text(
-                "body { font-family: serif; line-height: 1.5; }\n",
+                DEFAULT_GALLEYS_CSS,
                 encoding="utf-8",
             )
 
         if logo_files:
             shutil.copy2(logo_files[0], output_dir / logo_files[0].name)
+        elif not (output_dir / journal.logo).exists():
+            (output_dir / journal.logo).write_text(_default_logo_svg(journal.name), encoding="utf-8")
 
     def _notify(
         self,
@@ -170,3 +177,56 @@ class ArticlePipeline:
     ) -> None:
         if progress:
             progress(status, message)
+
+
+DEFAULT_GALLEYS_CSS = """body{
+    font-family: Arial, sans-serif;
+    margin: 2vw;
+}
+h1,h2,h3,h4{
+    font-family: Arial,sans-serif;
+    margin:0;
+}
+table.header-table{
+    border-collapse: collapse;
+    text-align: center;
+}
+table.header-table td{
+    border: 2px solid #0B8BC9;
+    padding:7px;
+}
+table.header-table td.info{
+    width: 90vw;
+}
+table{
+    width: 100%;
+    border-collapse:collapse;
+}
+table td{
+    border: 1px solid #d0d0d0;
+    padding:.3vw;
+}
+div#article-title{
+    text-transform: uppercase;
+    font-size: 24px;
+    font-weight: bold;
+    text-align: center;
+}
+.center-text {
+    text-align: center;
+}
+.title {
+    font-weight: bold;
+    text-align: center;
+}
+"""
+
+
+def _default_logo_svg(title: str) -> str:
+    escaped_title = title.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    return f"""<svg xmlns="http://www.w3.org/2000/svg" width="320" height="110" viewBox="0 0 320 110">
+  <rect width="320" height="110" fill="white"/>
+  <text x="160" y="48" text-anchor="middle" font-family="Arial, sans-serif" font-size="20" fill="#555">{escaped_title}</text>
+  <text x="160" y="76" text-anchor="middle" font-family="Arial, sans-serif" font-size="15" fill="#d71945">MLS Journals</text>
+</svg>
+"""
