@@ -57,6 +57,7 @@ class JobStatusResponse(BaseModel):
     abstract_word_limit: int = 250
     html_url: str | None = None
     epub_url: str | None = None
+    delivery_dir_path: str | None = None
     delivery_url: str | None = None
 
 
@@ -245,5 +246,18 @@ def _to_status_response(record: JobRecord) -> JobStatusResponse:
         abstract_en_word_count=word_count(article.abstract_en) if article else None,
         html_url=html_url,
         epub_url=epub_url,
+        delivery_dir_path=_delivery_dir_path(record.result),
         delivery_url=delivery_url,
     )
+
+
+def _delivery_dir_path(result: PipelineResult | None) -> str | None:
+    if not result or not result.delivery_dir:
+        return None
+
+    try:
+        relative_path = result.delivery_dir.relative_to(app_settings.deliveries_dir)
+    except ValueError:
+        return str(result.delivery_dir)
+
+    return str(Path("deliveries") / relative_path)

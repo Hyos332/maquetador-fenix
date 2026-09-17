@@ -1,4 +1,4 @@
-import { Download, ExternalLink, FileText, Send } from "lucide-react";
+import { Download, ExternalLink, FileText, FolderOpen, Send } from "lucide-react";
 import { useEffect, useState } from "react";
 import { resolveApiUrl, updateAbstracts } from "../services/api";
 import type { CreateJobResponse, JobStatusResponse } from "../types/pipeline";
@@ -128,6 +128,16 @@ export function ResultPanel({ job, onReviewStarted }: ResultPanelProps) {
             <Send size={17} />
             {savingReview ? "Enviando" : "Aplicar y regenerar"}
           </button>
+        </div>
+      ) : null}
+
+      {job.delivery_dir_path ? (
+        <div className="folder-output">
+          <FolderOpen size={20} />
+          <div>
+            <h3>Carpeta organizada</h3>
+            <code>{job.delivery_dir_path}</code>
+          </div>
         </div>
       ) : null}
 
