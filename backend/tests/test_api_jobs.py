@@ -40,6 +40,7 @@ def test_api_creates_job_and_exposes_outputs(tmp_path, monkeypatch) -> None:
     assert payload["html_url"] == f"/api/jobs/{job_id}/html"
     assert payload["epub_url"] == f"/api/jobs/{job_id}/epub"
     assert payload["delivery_url"] == f"/api/jobs/{job_id}/delivery"
+    assert payload["delivery_dir_path"]
 
     assert client.get(payload["html_url"]).status_code == 200
     assert client.get(payload["epub_url"]).status_code == 200
