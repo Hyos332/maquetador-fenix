@@ -30,6 +30,6 @@ def test_pipeline_creates_clean_delivery_zip(tmp_path: Path) -> None:
 
     with ZipFile(result.delivery_zip) as archive:
         zip_names = archive.namelist()
-        assert "Alberto_Nilson_esp.html" in zip_names
-        assert "Alberto_Nilson_esp.epub" in zip_names
+        assert "Alberto Nilson-esp/Alberto_Nilson_esp.html" in zip_names
+        assert "Alberto Nilson-esp/Alberto_Nilson_esp.epub" in zip_names
         assert not any(name.endswith(".docx") or name.endswith(".pdf") for name in zip_names)

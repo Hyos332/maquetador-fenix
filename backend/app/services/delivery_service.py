@@ -42,7 +42,7 @@ class DeliveryService:
                 delivery_dir / figure.output_filename,
             )
 
-        delivery_zip = author_dir / f"{file_stem}_entrega.zip"
+        delivery_zip = author_dir / f"{file_stem}_{language_suffix}.zip"
         self._zip_delivery(delivery_dir, delivery_zip)
         return delivery_dir, delivery_zip
 
@@ -54,4 +54,4 @@ class DeliveryService:
         with zipfile.ZipFile(delivery_zip, "w", compression=zipfile.ZIP_DEFLATED) as archive:
             for path in sorted(delivery_dir.rglob("*")):
                 if path.is_file():
-                    archive.write(path, path.relative_to(delivery_dir))
+                    archive.write(path, Path(delivery_dir.name) / path.relative_to(delivery_dir))
