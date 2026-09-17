@@ -33,7 +33,17 @@ class ZipService:
         self.max_size_bytes = max_size_mb * 1024 * 1024
 
     def extract_article_zip(self, source_zip: Path, job_id: str | None = None) -> ExtractedPackage:
-        source_zip = source_zip.expanduser().resolve()
+        return self.extract_article_package(source_zip, job_id=job_id)
+
+    def extract_article_package(self, source_path: Path, job_id: str | None = None) -> ExtractedPackage:
+        source_path = source_path.expanduser().resolve()
+        if source_path.suffix.lower() == ".zip":
+            return self._extract_zip(source_path, job_id=job_id)
+        if source_path.suffix.lower() == ".docx":
+            return self._extract_docx(source_path, job_id=job_id)
+        raise ZipValidationError("Only .zip and .docx files are supported.")
+
+    def _extract_zip(self, source_zip: Path, job_id: str | None = None) -> ExtractedPackage:
         self._validate_source_zip(source_zip)
 
         workspace = self._create_workspace(job_id)
@@ -67,6 +77,24 @@ class ZipService:
             logo_files=logo_files,
         )
 
+    def _extract_docx(self, source_docx: Path, job_id: str | None = None) -> ExtractedPackage:
+        self._validate_source_docx(source_docx)
+
+        workspace = self._create_workspace(job_id)
+        original_copy = workspace.original_dir / sanitize_filename(source_docx.name, "article.docx")
+        extracted_copy = workspace.extracted_dir / original_copy.name
+        shutil.copy2(source_docx, original_copy)
+        shutil.copy2(source_docx, extracted_copy)
+
+        return ExtractedPackage(
+            workspace=workspace,
+            source_zip=original_copy,
+            docx_files=[extracted_copy],
+            pdf_files=[],
+            css_files=[],
+            logo_files=[],
+        )
+
     def _validate_source_zip(self, source_zip: Path) -> None:
         if not source_zip.exists():
             raise ZipValidationError(f"ZIP not found: {source_zip}")
@@ -76,6 +104,14 @@ class ZipService:
             raise ZipValidationError("ZIP exceeds configured size limit.")
         if not zipfile.is_zipfile(source_zip):
             raise ZipValidationError("File is not a valid ZIP archive.")
+
+    def _validate_source_docx(self, source_docx: Path) -> None:
+        if not source_docx.exists():
+            raise ZipValidationError(f"DOCX not found: {source_docx}")
+        if source_docx.stat().st_size > self.max_size_bytes:
+            raise ZipValidationError("DOCX exceeds configured size limit.")
+        if not zipfile.is_zipfile(source_docx):
+            raise ZipValidationError("File is not a valid DOCX archive.")
 
     def _validate_members(self, archive: zipfile.ZipFile) -> None:
         for member in archive.infolist():

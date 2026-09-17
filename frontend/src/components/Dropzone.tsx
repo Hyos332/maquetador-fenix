@@ -38,7 +38,7 @@ export function Dropzone({ file, disabled, onFileSelected, onSubmit }: DropzoneP
       </div>
       <div>
         <h1>Maquetador MLS automático</h1>
-        <p>Arrastra el ZIP del artículo o selecciónalo desde el equipo.</p>
+        <p>Arrastra el DOCX o ZIP del artículo, o selecciónalo desde el equipo.</p>
       </div>
       {file ? (
         <div className="selected-file">
@@ -49,7 +49,7 @@ export function Dropzone({ file, disabled, onFileSelected, onSubmit }: DropzoneP
       <div className="dropzone__actions">
         <button type="button" className="button button--secondary" onClick={() => inputRef.current?.click()}>
           <Upload size={17} />
-          Seleccionar ZIP
+          Seleccionar archivo
         </button>
         <button type="button" className="button button--primary" disabled={!file || disabled} onClick={onSubmit}>
           Maquetar artículo
@@ -58,7 +58,7 @@ export function Dropzone({ file, disabled, onFileSelected, onSubmit }: DropzoneP
       <input
         ref={inputRef}
         type="file"
-        accept=".zip,application/zip"
+        accept=".docx,.zip,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/zip"
         hidden
         onChange={(event) => handleFiles(event.target.files)}
       />

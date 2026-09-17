@@ -78,9 +78,9 @@ def health() -> dict[str, str]:
 
 @router.post("/jobs", response_model=CreateJobResponse)
 async def create_job(background_tasks: BackgroundTasks, file: UploadFile = File(...)) -> CreateJobResponse:
-    filename = sanitize_filename(file.filename or "article.zip")
-    if not filename.lower().endswith(".zip"):
-        raise HTTPException(status_code=400, detail="Solo se aceptan archivos .zip.")
+    filename = sanitize_filename(file.filename or "article.docx")
+    if not filename.lower().endswith((".zip", ".docx")):
+        raise HTTPException(status_code=400, detail="Solo se aceptan archivos .zip o .docx.")
 
     job_id = uuid.uuid4().hex
     upload_dir = ensure_directory(app_settings.workspaces_dir / "incoming")

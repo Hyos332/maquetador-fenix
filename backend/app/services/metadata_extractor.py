@@ -4,7 +4,7 @@ import re
 from datetime import date
 
 from app.exceptions import MetadataExtractionError
-from app.models.article import Article, Author
+from app.models.article import Article, ArticleLanguage, Author
 from app.services.docx_parser import ParagraphBlock, ParsedDocument, TableBlock
 from app.utils.strings import normalize_for_match, normalize_whitespace
 
@@ -24,22 +24,24 @@ class MetadataExtractor:
         doi = self._extract_doi(parsed.full_text)
         citation_index = self._find_citation_index(paragraphs, doi)
 
-        title_es = self._paragraph_after(paragraphs, citation_index, offset=1)
-        title_en = self._paragraph_after(paragraphs, citation_index, offset=2)
+        first_title = self._paragraph_after(paragraphs, citation_index, offset=1)
+        second_title = self._paragraph_after(paragraphs, citation_index, offset=2)
         author_name = self._paragraph_after(paragraphs, citation_index, offset=3)
         author_details = self._paragraph_after(paragraphs, citation_index, offset=4)
 
-        if not title_es or not author_name:
+        if not first_title or not author_name:
             raise MetadataExtractionError("Could not identify article title and author.")
 
         dates = self._extract_dates(parsed.full_text)
         volume, issue, pages = self._extract_volume_issue_pages(
             paragraphs[citation_index].text if citation_index is not None else ""
         )
-        abstract_es, keywords_es, abstract_en, keywords_en = self._extract_abstract_table(parsed)
+        abstract_es, keywords_es, abstract_en, keywords_en, language = self._extract_abstract_table(parsed)
+        title_es, title_en = _assign_titles(first_title, second_title, language)
 
         return Article(
-            journal="mlshnr",
+            language=language,
+            journal=self._extract_journal_key(parsed.full_text),
             title_es=title_es,
             title_en=title_en,
             abstract_es=abstract_es,
@@ -124,11 +126,12 @@ class MetadataExtractor:
     def _extract_abstract_table(
         self,
         parsed: ParsedDocument,
-    ) -> tuple[str | None, list[str], str | None, list[str]]:
+    ) -> tuple[str | None, list[str], str | None, list[str], ArticleLanguage]:
         abstract_es: str | None = None
         abstract_en: str | None = None
         keywords_es: list[str] = []
         keywords_en: list[str] = []
+        first_abstract_label: str | None = None
 
         for block in parsed.blocks:
             if not isinstance(block, TableBlock):
@@ -144,13 +147,24 @@ class MetadataExtractor:
 
                 label = normalize_for_match(row[0])
                 if label.startswith("palabras clave"):
+                    first_abstract_label = first_abstract_label or "es"
                     keywords_es = _split_keywords(row[0])
                     abstract_es = row[1]
                 elif label.startswith("keywords"):
+                    first_abstract_label = first_abstract_label or "en"
                     keywords_en = _split_keywords(row[0])
                     abstract_en = row[1]
 
-        return abstract_es, keywords_es, abstract_en, keywords_en
+        language = ArticleLanguage.ENGLISH if first_abstract_label == "en" else ArticleLanguage.SPANISH
+        return abstract_es, keywords_es, abstract_en, keywords_en, language
+
+    def _extract_journal_key(self, text: str) -> str:
+        normalized = normalize_for_match(text)
+        if "mls - educational research" in normalized or "mlser" in normalized:
+            return "mlser"
+        if "health" in normalized and "nutrition" in normalized:
+            return "mlshnr"
+        return "mlshnr"
 
 
 def _parse_short_date(value: str) -> date:
@@ -164,3 +178,13 @@ def _split_keywords(value: str) -> list[str]:
         return []
     raw_keywords = value.split(":", 1)[1].replace("|", " ")
     return [normalize_whitespace(keyword) for keyword in raw_keywords.split(",") if keyword.strip()]
+
+
+def _assign_titles(
+    first_title: str,
+    second_title: str | None,
+    language: ArticleLanguage,
+) -> tuple[str | None, str | None]:
+    if language == ArticleLanguage.ENGLISH:
+        return second_title, first_title
+    return first_title, second_title

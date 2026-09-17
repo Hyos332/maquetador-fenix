@@ -99,4 +99,6 @@ class Article(BaseModel):
 
     @property
     def primary_title(self) -> str:
+        if self.language == ArticleLanguage.ENGLISH:
+            return self.title_en or self.title_es or ""
         return self.title_es or self.title_en or ""
