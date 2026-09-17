@@ -37,9 +37,10 @@ class ImageExtractor:
             if not isinstance(block, ParagraphBlock) or not block.image_relationship_ids:
                 continue
 
-            caption = self._find_caption(parsed, block_index)
-            if not caption:
+            caption_match = self._find_caption(parsed, block_index)
+            if not caption_match:
                 continue
+            caption, caption_block_index = caption_match
 
             for relationship_id in block.image_relationship_ids:
                 relationship = parsed.image_relationships.get(relationship_id)
@@ -60,12 +61,14 @@ class ImageExtractor:
                         source=Path(relationship.package_path),
                         output_filename=output_filename,
                         caption=caption,
+                        block_index=block_index,
+                        caption_block_index=caption_block_index,
                     )
                 )
 
         return ImageExtractionResult(figures=figures, warnings=warnings)
 
-    def _find_caption(self, parsed: ParsedDocument, block_index: int) -> str | None:
+    def _find_caption(self, parsed: ParsedDocument, block_index: int) -> tuple[str, int] | None:
         for candidate_index in (block_index + 1, block_index - 1):
             if candidate_index < 0 or candidate_index >= len(parsed.blocks):
                 continue
@@ -76,7 +79,7 @@ class ImageExtractor:
 
             normalized = normalize_for_match(candidate.text)
             if normalized.startswith("figura ") or normalized.startswith("tabla "):
-                return candidate.text
+                return candidate.text, candidate_index
 
         return None
 

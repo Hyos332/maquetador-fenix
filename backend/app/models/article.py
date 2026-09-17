@@ -53,6 +53,8 @@ class Figure(BaseModel):
     output_filename: str
     caption: str | None = None
     is_logo: bool = False
+    block_index: int | None = None
+    caption_block_index: int | None = None
 
 
 class ArticleTable(BaseModel):
