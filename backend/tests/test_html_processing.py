@@ -35,6 +35,11 @@ def test_html_renderer_processor_and_validator_keep_critical_header(tmp_path: Pa
     assert article.primary_title in processed_text
     assert article.authors[0].email in processed_text
 
+    root = html.fromstring(processed_text)
+    assert root.xpath("//table[contains(concat(' ', normalize-space(@class), ' '), ' header-table ')]")
+    assert root.xpath("//div[@id='article-title']//*[contains(@class, 'center-text')]")
+    assert not root.xpath("//header[contains(concat(' ', normalize-space(@class), ' '), ' journal-header ')]")
+
 
 def test_pipeline_generates_valid_postprocessed_html(tmp_path: Path) -> None:
     from app.config.settings import Settings

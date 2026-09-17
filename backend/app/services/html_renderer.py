@@ -23,77 +23,149 @@ class IntermediateHtmlRenderer:
         figures_html = "\n".join(self._render_figure(figure, journal) for figure in article.figures)
         sections_html = "\n".join(self._render_section(section.title, section.html_content) for section in article.sections)
         references_html = "\n".join(self._render_reference(reference) for reference in article.references)
+        citation_html = self._render_citation(article, journal)
+        title_en_html = self._render_translated_title(article.title_en)
+        abstract_en_html = self._render_abstract_en(article)
 
-        return f"""<!doctype html>
-<html lang="{escape(article.language.value)}">
+        return f"""<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
 <head>
-  <meta charset="utf-8">
-  <title>{escape(title)}</title>
-  <link rel="stylesheet" href="galleys.css">
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <link rel="stylesheet" href="galleys.css">
 </head>
 <body>
-  <header class="journal-header">
-    <img class="journal-logo" src="{escape(journal.logo)}" alt="{escape(journal.name)}">
-    <p class="journal-name">{escape(journal.name)}</p>
-    <p class="journal-meta"><a href="{escape(journal.url)}">{escape(journal.url)}</a> ISSN: {escape(journal.issn)}</p>
-  </header>
-  <main>
-    <article>
-      <h1>{escape(title)}</h1>
-      <h2>{escape(article.title_en or "")}</h2>
-      <section class="authors">
-        {author_html}
-      </section>
-      <section class="manuscript-dates">
-        <p>Recibido/Received: {format_short_spanish_date(article.received_date)}</p>
-        <p>Revisado/Reviewed: {format_short_spanish_date(article.reviewed_date)}</p>
-        <p>Aceptado/Accepted: {format_short_spanish_date(article.accepted_date)}</p>
-      </section>
-      <section class="abstract abstract-es">
-        <h2>Resumen</h2>
-        <p>{escape(article.abstract_es or "")}</p>
-        <p><strong>Palabras clave:</strong> {escape(", ".join(article.keywords_es))}</p>
-      </section>
-      <section class="abstract abstract-en">
-        <h2>Abstract</h2>
-        <p>{escape(article.abstract_en or "")}</p>
-        <p><strong>Keywords:</strong> {escape(", ".join(article.keywords_en))}</p>
-      </section>
-      {sections_html}
-      <section class="figures">
-        <h2>Figuras y tablas</h2>
-        {figures_html}
-      </section>
-      <section class="references">
-        <h2>Referencias</h2>
-        <ol>
-          {references_html}
-        </ol>
-      </section>
-    </article>
-  </main>
+    <div>
+        <div>
+            <table class="header-table center-text">
+                <tbody>
+                    <tr>
+                        <td class="info">
+                            <h1>{escape(journal.name)}</h1>
+                            <a target="_blank" href="{escape(journal.url)}">{escape(journal.url)}</a>
+                            <p>ISSN: {escape(journal.issn)}</p>
+                        </td>
+                        <td>
+                            <img src="{escape(journal.logo)}" style="width: 200px!important">
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        {citation_html}
+        <div id="article-title">
+            <p class="center-text"><b>{escape(title)}</b></p>
+        </div>
+        <div>
+            {author_html}
+        </div>
+        <p>{self._render_dates(article)}</p>
+    </div>
+
+    <div>
+        <p><strong>Resumen: </strong>{escape(article.abstract_es or "")}</p>
+        <p><b>Palabras clave</b>: {escape(", ".join(article.keywords_es))}</p>
+    </div>
+    <hr>
+    {title_en_html}
+    {abstract_en_html}
+    <hr>
+    {sections_html}
+    {figures_html}
+    <div>
+        <p class="title">Referencias</p>
+        {references_html}
+    </div>
 </body>
 </html>
 """
 
     def _render_author(self, author) -> str:
-        email = f' <a href="mailto:{escape(author.email)}">{escape(author.email)}</a>' if author.email else ""
-        orcid = f' <a href="{escape(author.orcid)}">{escape(author.orcid)}</a>' if author.orcid else ""
-        institution = f"<span>{escape(author.institution)}</span>" if author.institution else ""
-        return f'<p class="author"><strong>{escape(author.full_name)}</strong> {institution}{email}{orcid}</p>'
+        institution = escape(author.institution or "")
+        if author.country:
+            institution = f"{institution} ({escape(author.country)})"
+        email = (
+            f'<a target="_blank" href="mailto:{escape(author.email)}">{escape(author.email)}</a>'
+            if author.email
+            else ""
+        )
+        orcid = (
+            f'<a target="_blank" href="{escape(author.orcid)}">{escape(author.orcid)}</a>'
+            if author.orcid
+            else ""
+        )
+        contact = " · ".join(part for part in (email, orcid) if part)
+        contact_html = f"<br />{contact}" if contact else ""
+        institution_html = f"<br />{institution}" if institution else ""
+        return (
+            '<p class="center-text">'
+            f"<b>{escape(author.full_name)}</b>"
+            f"{institution_html}"
+            f"{contact_html}"
+            "</p>"
+        )
 
     def _render_section(self, title: str, html_content: str) -> str:
-        return f"<section>\n<h2>{escape(title)}</h2>\n{html_content}\n</section>"
+        return f'<div>\n<p class="title">{escape(title)}</p>\n{html_content}\n</div>'
 
     def _render_figure(self, figure, journal: JournalConfig) -> str:
         caption = escape(figure.caption or f"Figura {figure.number}")
         return (
-            "<figure>"
+            '<div class="center-text">'
             f'<img src="{escape(figure.output_filename)}" alt="{caption}" '
             f'style="{escape(journal.image_style.html_style)}">'
-            f"<figcaption>{caption}</figcaption>"
-            "</figure>"
+            f"<p><i>{caption}</i></p>"
+            "</div>"
         )
 
     def _render_reference(self, reference: Reference) -> str:
-        return f'<li id="ref-{reference.number}">[{reference.number}] {escape(reference.raw_text)}</li>'
+        return f'<p id="ref-{reference.number}">[{reference.number}] {escape(reference.raw_text)}</p>'
+
+    def _render_dates(self, article: Article) -> str:
+        return (
+            f"<b>Fecha de recepción:</b> {format_short_spanish_date(article.received_date)} / "
+            f"<b>Fecha de revisión:</b> {format_short_spanish_date(article.reviewed_date)} / "
+            f"<b>Fecha de aceptación:</b> {format_short_spanish_date(article.accepted_date)}"
+        )
+
+    def _render_citation(self, article: Article, journal: JournalConfig) -> str:
+        if not article.doi:
+            return ""
+
+        year = article.accepted_date.year if article.accepted_date else ""
+        volume_issue = ""
+        if article.volume and article.issue:
+            volume_issue = f", {escape(article.volume)}({escape(article.issue)})"
+
+        return (
+            "<div>"
+            '<p class="center-text" style="color: #308BCC;">'
+            f"<b>({year}) {escape(_citation_journal_name(journal))}{volume_issue}, "
+            f"doi.org/{escape(article.doi)}</b>"
+            "</p>"
+            "</div>"
+        )
+
+    def _render_translated_title(self, title_en: str | None) -> str:
+        if not title_en:
+            return ""
+        return (
+            '<div id="article-title">'
+            f'<p class="center-text"><b>{escape(title_en)}</b></p>'
+            "</div>"
+        )
+
+    def _render_abstract_en(self, article: Article) -> str:
+        if not article.abstract_en and not article.keywords_en:
+            return ""
+        return (
+            "<div>"
+            f"<p><strong>Abstract: </strong>{escape(article.abstract_en or '')}</p>"
+            f"<p><b>Keywords</b>: {escape(', '.join(article.keywords_en))}</p>"
+            "</div>"
+        )
+
+
+def _citation_journal_name(journal: JournalConfig) -> str:
+    if journal.key == "mlshnr":
+        return "MLS-Health & Nutrition Research"
+    return journal.name
