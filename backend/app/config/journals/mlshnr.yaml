@@ -1,0 +1,9 @@
+key: mlshnr
+name: "MLS - HEALTH & NUTRITION RESEARCH (MLSHNR)"
+publisher: "Multi Lingual Scientific Journals"
+url: "https://www.mlsjournals.com/MLS-Health-Nutrition"
+issn: "2952-2471"
+logo: "logo-mlshn.svg"
+image_style:
+  max_width_px: 700
+  max_height_px: 600
