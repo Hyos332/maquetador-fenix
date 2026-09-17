@@ -13,12 +13,14 @@ WORD_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 REL_NS = "http://schemas.openxmlformats.org/package/2006/relationships"
 OFFICE_REL_NS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 DRAWING_NS = "http://schemas.openxmlformats.org/drawingml/2006/main"
+CHART_NS = "http://schemas.openxmlformats.org/drawingml/2006/chart"
 
 NS = {
     "w": WORD_NS,
     "pr": REL_NS,
     "r": OFFICE_REL_NS,
     "a": DRAWING_NS,
+    "c": CHART_NS,
 }
 
 
@@ -30,10 +32,18 @@ class ImageRelationship:
 
 
 @dataclass(frozen=True)
+class ChartRelationship:
+    relationship_id: str
+    target: str
+    package_path: str
+
+
+@dataclass(frozen=True)
 class ParagraphBlock:
     index: int
     text: str
     image_relationship_ids: tuple[str, ...] = ()
+    chart_relationship_ids: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -41,6 +51,7 @@ class TableBlock:
     index: int
     rows: tuple[tuple[str, ...], ...]
     image_relationship_ids: tuple[str, ...] = ()
+    chart_relationship_ids: tuple[str, ...] = ()
 
 
 DocumentBlock = ParagraphBlock | TableBlock
@@ -51,6 +62,7 @@ class ParsedDocument:
     path: Path
     blocks: tuple[DocumentBlock, ...]
     image_relationships: dict[str, ImageRelationship]
+    chart_relationships: dict[str, ChartRelationship]
 
     @property
     def full_text(self) -> str:
@@ -71,12 +83,23 @@ class DocxParser:
         with ZipFile(docx_path) as archive:
             document_root = etree.fromstring(archive.read("word/document.xml"))
             relationships = self._read_image_relationships(archive)
+            chart_relationships = self._read_chart_relationships(archive)
             body = document_root.find("w:body", NS)
             if body is None:
-                return ParsedDocument(path=docx_path, blocks=(), image_relationships=relationships)
+                return ParsedDocument(
+                    path=docx_path,
+                    blocks=(),
+                    image_relationships=relationships,
+                    chart_relationships=chart_relationships,
+                )
 
             blocks = tuple(self._parse_body(body))
-            return ParsedDocument(path=docx_path, blocks=blocks, image_relationships=relationships)
+            return ParsedDocument(
+                path=docx_path,
+                blocks=blocks,
+                image_relationships=relationships,
+                chart_relationships=chart_relationships,
+            )
 
     def _read_image_relationships(self, archive: ZipFile) -> dict[str, ImageRelationship]:
         rels_root = etree.fromstring(archive.read("word/_rels/document.xml.rels"))
@@ -94,6 +117,29 @@ class DocxParser:
 
             package_path = target if target.startswith("word/") else f"word/{target}"
             relationships[relationship_id] = ImageRelationship(
+                relationship_id=relationship_id,
+                target=target,
+                package_path=package_path,
+            )
+
+        return relationships
+
+    def _read_chart_relationships(self, archive: ZipFile) -> dict[str, ChartRelationship]:
+        rels_root = etree.fromstring(archive.read("word/_rels/document.xml.rels"))
+        relationships: dict[str, ChartRelationship] = {}
+
+        for rel in rels_root.xpath("./pr:Relationship", namespaces=NS):
+            rel_type = rel.get("Type", "")
+            if not rel_type.endswith("/chart"):
+                continue
+
+            relationship_id = rel.get("Id")
+            target = rel.get("Target")
+            if not relationship_id or not target:
+                continue
+
+            package_path = target if target.startswith("word/") else f"word/{target}"
+            relationships[relationship_id] = ChartRelationship(
                 relationship_id=relationship_id,
                 target=target,
                 package_path=package_path,
@@ -134,11 +180,17 @@ class DocxParser:
     def _parse_paragraph(self, paragraph: etree._Element, index: int) -> ParagraphBlock | None:
         text = normalize_whitespace("".join(paragraph.xpath(".//w:t/text()", namespaces=NS)))
         image_ids = tuple(paragraph.xpath(".//a:blip/@r:embed", namespaces=NS))
+        chart_ids = tuple(paragraph.xpath(".//c:chart/@r:id", namespaces=NS))
 
-        if not text and not image_ids:
+        if not text and not image_ids and not chart_ids:
             return None
 
-        return ParagraphBlock(index=index, text=text, image_relationship_ids=image_ids)
+        return ParagraphBlock(
+            index=index,
+            text=text,
+            image_relationship_ids=image_ids,
+            chart_relationship_ids=chart_ids,
+        )
 
     def _parse_table(self, table: etree._Element, index: int) -> TableBlock | None:
         rows: list[tuple[str, ...]] = []
@@ -154,7 +206,13 @@ class DocxParser:
             rows.append(tuple(cells))
 
         image_ids = tuple(table.xpath(".//a:blip/@r:embed", namespaces=NS))
-        if not rows and not image_ids:
+        chart_ids = tuple(table.xpath(".//c:chart/@r:id", namespaces=NS))
+        if not rows and not image_ids and not chart_ids:
             return None
 
-        return TableBlock(index=index, rows=tuple(rows), image_relationship_ids=image_ids)
+        return TableBlock(
+            index=index,
+            rows=tuple(rows),
+            image_relationship_ids=image_ids,
+            chart_relationship_ids=chart_ids,
+        )

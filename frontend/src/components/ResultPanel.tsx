@@ -32,6 +32,7 @@ export function ResultPanel({ job, onReviewStarted }: ResultPanelProps) {
   const htmlUrl = job.html_url ? resolveApiUrl(job.html_url) : null;
   const epubUrl = job.epub_url ? resolveApiUrl(job.epub_url) : null;
   const deliveryUrl = job.delivery_url ? resolveApiUrl(job.delivery_url) : null;
+  const deliveryArchiveUrl = job.delivery_archive_url ? resolveApiUrl(job.delivery_archive_url) : null;
   const jobId = job.job_id;
   const abstractReview = getAbstractReviewState(job, abstractEs, abstractEn);
 
@@ -148,10 +149,16 @@ export function ResultPanel({ job, onReviewStarted }: ResultPanelProps) {
             Ver HTML
           </a>
         ) : null}
-        {deliveryUrl ? (
-          <a className="button button--primary" href={deliveryUrl} target="_blank" rel="noreferrer">
+        {deliveryArchiveUrl ? (
+          <a className="button button--primary" href={deliveryArchiveUrl}>
             <FolderOpen size={17} />
-            Ver archivos de la carpeta
+            Descargar carpeta completa
+          </a>
+        ) : null}
+        {deliveryUrl ? (
+          <a className="button button--secondary" href={deliveryUrl} target="_blank" rel="noreferrer">
+            <ExternalLink size={17} />
+            Ver archivos
           </a>
         ) : null}
         {epubUrl ? (

@@ -34,8 +34,13 @@ class ImageExtractor:
             ensure_directory(output_dir)
 
         seen_relationship_ids: set[str] = set()
+        chart_exports = self._export_chart_images(parsed) if parsed.chart_relationships else []
+        chart_export_index = 0
         for block_index, block in enumerate(parsed.blocks):
-            if not block.image_relationship_ids or self._is_journal_header_image_block(block_index, block):
+            if (
+                not block.image_relationship_ids
+                and not block.chart_relationship_ids
+            ) or self._is_journal_header_image_block(block_index, block):
                 continue
 
             caption_match = self._find_caption(parsed, block_index)
@@ -57,6 +62,35 @@ class ImageExtractor:
                         self._write_png(parsed, relationship.package_path, output_dir / output_filename)
                     except OSError as exc:
                         warnings.append(f"Could not convert {relationship.package_path}: {exc}")
+
+                figures.append(
+                    Figure(
+                        number=len(figures) + 1,
+                        source=Path(relationship.package_path),
+                        output_filename=output_filename,
+                        caption=caption,
+                        block_index=block_index,
+                        caption_block_index=caption_block_index,
+                    )
+                )
+
+            for relationship_id in block.chart_relationship_ids:
+                if relationship_id in seen_relationship_ids:
+                    continue
+                seen_relationship_ids.add(relationship_id)
+
+                relationship = parsed.chart_relationships.get(relationship_id)
+                if not relationship:
+                    warnings.append(f"Chart relationship not found: {relationship_id}")
+                    continue
+
+                output_filename = f"Figure_{len(figures) + 1}.PNG"
+                if output_dir:
+                    if chart_export_index >= len(chart_exports):
+                        warnings.append(f"Could not export chart {relationship.package_path}.")
+                    else:
+                        chart_exports[chart_export_index].save(output_dir / output_filename, format="PNG")
+                chart_export_index += 1
 
                 figures.append(
                     Figure(
@@ -160,3 +194,37 @@ class ImageExtractor:
                 raise OSError("libreoffice did not create a PNG file.")
 
             output_path.write_bytes(converted_path.read_bytes())
+
+    def _export_chart_images(self, parsed: ParsedDocument) -> list[Image.Image]:
+        libreoffice = shutil.which("libreoffice")
+        if not libreoffice:
+            return []
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            subprocess.run(
+                [
+                    libreoffice,
+                    "--headless",
+                    "--convert-to",
+                    "html",
+                    "--outdir",
+                    str(temp_path),
+                    str(parsed.path),
+                ],
+                check=True,
+                capture_output=True,
+                timeout=60,
+            )
+
+            images: list[Image.Image] = []
+            for path in sorted(temp_path.iterdir(), key=lambda item: item.stat().st_mtime_ns):
+                if path.suffix.lower() not in {".gif", ".png", ".jpg", ".jpeg"}:
+                    continue
+                image = Image.open(path)
+                width, height = image.size
+                if width < 300 or height < 200:
+                    continue
+                images.append(image.convert("RGBA"))
+
+            return images

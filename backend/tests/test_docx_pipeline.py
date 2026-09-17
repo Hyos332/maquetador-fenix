@@ -113,6 +113,7 @@ def test_image_extractor_keeps_real_table_images_without_caption_and_skips_heade
             "rLogo": ImageRelationship("rLogo", "media/logo.png", "word/media/logo.png"),
             "rFigure": ImageRelationship("rFigure", "media/figure.png", "word/media/figure.png"),
         },
+        chart_relationships={},
     )
 
     result = ImageExtractor().extract_figures(parsed, output_dir=tmp_path / "figures")

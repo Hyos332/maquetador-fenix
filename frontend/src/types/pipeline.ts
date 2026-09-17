@@ -36,6 +36,7 @@ export interface JobStatusResponse {
   epub_url: string | null;
   delivery_dir_path: string | null;
   delivery_url: string | null;
+  delivery_archive_url: string | null;
 }
 
 export interface AbstractReviewPayload {

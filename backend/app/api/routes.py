@@ -61,6 +61,7 @@ class JobStatusResponse(BaseModel):
     epub_url: str | None = None
     delivery_dir_path: str | None = None
     delivery_url: str | None = None
+    delivery_archive_url: str | None = None
 
 
 class AbstractReviewRequest(BaseModel):
@@ -159,6 +160,18 @@ def get_job_delivery(job_id: str) -> HTMLResponse:
     return HTMLResponse(_render_delivery_folder(record.job_id, record.result.delivery_dir))
 
 
+@router.get("/jobs/{job_id}/delivery/archive")
+def get_job_delivery_archive(job_id: str) -> FileResponse:
+    record = _get_record(job_id)
+    if not record.result or not record.result.delivery_zip:
+        raise HTTPException(status_code=404, detail="Entrega no disponible.")
+    return FileResponse(
+        record.result.delivery_zip,
+        media_type="application/zip",
+        filename=record.result.delivery_zip.name,
+    )
+
+
 @router.get("/jobs/{job_id}/delivery/files/{asset_name}")
 def get_delivery_file(job_id: str, asset_name: str) -> FileResponse:
     if "/" in asset_name or "\\" in asset_name or asset_name in {"", ".", ".."}:
@@ -239,6 +252,11 @@ def _to_status_response(record: JobRecord) -> JobStatusResponse:
     html_url = f"/api/jobs/{record.job_id}/html" if record.result and record.result.html_path else None
     epub_url = f"/api/jobs/{record.job_id}/epub" if record.result and record.result.epub_path else None
     delivery_url = f"/api/jobs/{record.job_id}/delivery" if record.result and record.result.delivery_dir else None
+    delivery_archive_url = (
+        f"/api/jobs/{record.job_id}/delivery/archive"
+        if record.result and record.result.delivery_zip
+        else None
+    )
 
     return JobStatusResponse(
         job_id=record.job_id,
@@ -258,6 +276,7 @@ def _to_status_response(record: JobRecord) -> JobStatusResponse:
         epub_url=epub_url,
         delivery_dir_path=_delivery_dir_path(record.result),
         delivery_url=delivery_url,
+        delivery_archive_url=delivery_archive_url,
     )
 
 
