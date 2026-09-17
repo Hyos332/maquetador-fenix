@@ -147,4 +147,4 @@ class ZipService:
         )
 
     def _clean_uploaded_filename(self, filename: str) -> str:
-        return re.sub(r"^[a-f0-9]{32}_", "", filename, count=1)
+        return re.sub(r"^(?:[a-f0-9]{32}_)+", "", filename)
