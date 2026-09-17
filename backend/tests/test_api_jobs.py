@@ -43,3 +43,5 @@ def test_api_creates_job_and_exposes_outputs(tmp_path, monkeypatch) -> None:
     assert client.get(payload["html_url"]).status_code == 200
     assert client.get(payload["epub_url"]).status_code == 200
     assert client.get(payload["delivery_url"]).status_code == 200
+    assert client.get(f"/api/jobs/{job_id}/galleys.css").status_code == 200
+    assert client.get(f"/api/jobs/{job_id}/Figure_1.PNG").status_code == 200

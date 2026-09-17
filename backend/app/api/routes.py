@@ -120,6 +120,22 @@ def get_job_delivery(job_id: str) -> FileResponse:
     )
 
 
+@router.get("/jobs/{job_id}/{asset_name}")
+def get_job_asset(job_id: str, asset_name: str) -> FileResponse:
+    if "/" in asset_name or "\\" in asset_name or asset_name in {"", ".", ".."}:
+        raise HTTPException(status_code=400, detail="Nombre de recurso inválido.")
+
+    record = _get_record(job_id)
+    if not record.result:
+        raise HTTPException(status_code=404, detail="Recurso no disponible.")
+
+    asset_path = record.result.workspace.generated_dir / asset_name
+    if not asset_path.exists() or not asset_path.is_file():
+        raise HTTPException(status_code=404, detail="Recurso no encontrado.")
+
+    return FileResponse(asset_path)
+
+
 def _run_job(job_id: str, source_zip: Path, runtime_settings: Settings) -> None:
     def progress(status: PipelineStatus, message: str) -> None:
         with jobs_lock:

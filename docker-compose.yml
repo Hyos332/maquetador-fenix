@@ -1,0 +1,19 @@
+services:
+  mls-maquetador:
+    build:
+      context: .
+    container_name: mls-maquetador
+    network_mode: host
+    restart: unless-stopped
+    shm_size: "1gb"
+    environment:
+      MLS_APP_NAME: "Maquetador MLS"
+      MLS_WORKSPACES_DIR: "/data/workspaces"
+      MLS_DELIVERIES_DIR: "/data/deliveries"
+      MLS_MAQUETADOR_URL: "http://172.22.104.76:8087/"
+      MLS_DRY_RUN: "true"
+      MLS_PLAYWRIGHT_HEADLESS: "true"
+      MLS_MAX_ZIP_SIZE_MB: "100"
+    volumes:
+      - ./workspaces:/data/workspaces
+      - ./deliveries:/data/deliveries

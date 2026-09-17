@@ -17,7 +17,49 @@ Aplicación web local para analizar un ZIP de artículo MLS, extraer metadatos d
 
 ```bash
 sudo apt update
-sudo apt install -y python3.12 python3.12-venv libreoffice nodejs npm
+sudo apt install -y python3.12 python3.12-venv libreoffice nodejs npm docker.io docker-compose-plugin
+```
+
+## Opción recomendada: Docker permanente
+
+Esto deja la aplicación levantada en segundo plano y la vuelve a iniciar al reiniciar el PC.
+
+```bash
+docker compose up -d --build
+```
+
+Abrir:
+
+```text
+http://localhost:8000
+```
+
+Comandos útiles:
+
+```bash
+docker compose ps
+docker compose logs -f
+docker compose restart
+docker compose down
+```
+
+Por defecto el contenedor arranca con:
+
+```yaml
+MLS_DRY_RUN: "true"
+```
+
+Así no abre el maquetador externo y usa el HTML local determinista. Para usar Playwright contra `http://172.22.104.76:8087/`, cambia en `docker-compose.yml`:
+
+```yaml
+MLS_DRY_RUN: "false"
+```
+
+El contenedor usa `network_mode: host` para que pueda acceder a la red interna igual que tu PC. Las salidas quedan persistidas en:
+
+```text
+./workspaces
+./deliveries
 ```
 
 ## Backend
