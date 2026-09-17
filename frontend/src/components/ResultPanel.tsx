@@ -157,7 +157,7 @@ export function ResultPanel({ job, onReviewStarted }: ResultPanelProps) {
         {deliveryUrl ? (
           <a className="button button--primary" href={deliveryUrl}>
             <Download size={17} />
-            Descargar entrega ZIP
+            Descargar ZIP opcional
           </a>
         ) : null}
       </div>
