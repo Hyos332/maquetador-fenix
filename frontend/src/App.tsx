@@ -13,7 +13,7 @@ export default function App() {
   const [jobId, setJobId] = useState<string | null>(null);
   const [job, setJob] = useState<JobStatusResponse | null>(null);
   const [status, setStatus] = useState<PipelineStatus>("PENDING");
-  const [message, setMessage] = useState("Esperando ZIP.");
+  const [message, setMessage] = useState("Esperando documento.");
   const [error, setError] = useState<string | null>(null);
 
   const busy = useMemo(() => {
@@ -42,7 +42,7 @@ export default function App() {
     if (!file) return;
     setError(null);
     setStatus("PENDING");
-    setMessage("Subiendo ZIP.");
+    setMessage("Subiendo documento.");
     setJob(null);
 
     try {
@@ -51,7 +51,7 @@ export default function App() {
       setStatus(created.status);
       setMessage(created.message);
     } catch (uploadError) {
-      setError(uploadError instanceof Error ? uploadError.message : "No se pudo subir el ZIP.");
+      setError(uploadError instanceof Error ? uploadError.message : "No se pudo subir el archivo.");
       setStatus("FAILED");
     }
   }
