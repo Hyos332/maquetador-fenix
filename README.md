@@ -1,6 +1,6 @@
 # Maquetador MLS local
 
-Aplicación web local para analizar un DOCX o ZIP de artículo MLS, extraer metadatos desde DOCX/OOXML, generar HTML/EPUB validables y preparar una entrega limpia en ZIP.
+Aplicación web local para analizar un DOCX o ZIP de artículo MLS, extraer metadatos desde DOCX/OOXML, generar HTML/EPUB validables y preparar una carpeta de entrega limpia.
 
 ## Estado actual
 
@@ -10,7 +10,7 @@ Aplicación web local para analizar un DOCX o ZIP de artículo MLS, extraer meta
 - Extracción de DOI, fechas, autor, resumen/abstract, keywords, secciones, referencias e imágenes.
 - Conversión de imágenes a `Figure_N.PNG`, incluyendo EMF/WMF mediante LibreOffice.
 - HTML intermedio, post-procesador DOM, validador HTML y EPUB3.
-- Carpeta/ZIP final en `deliveries/`.
+- Carpeta final organizada en `deliveries/`; el ZIP queda como copia opcional.
 - Page Object Playwright para el maquetador MLS externo.
 - Frontend React/Vite con drag & drop, progreso, preview y descarga.
 
@@ -60,7 +60,7 @@ El contenedor publica la aplicación en el puerto local `8095`. Las salidas qued
 
 ```text
 ./workspaces
-./deliveries
+./deliveries   <- aqui queda la carpeta organizada
 ```
 
 ## Backend
