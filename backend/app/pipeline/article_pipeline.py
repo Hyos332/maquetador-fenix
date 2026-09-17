@@ -106,6 +106,7 @@ class ArticlePipeline:
         errors = [*article_validation.errors, *html_validation.errors, *epub_validation.errors]
         if errors:
             warnings.extend(errors)
+        warnings = list(dict.fromkeys(warnings))
 
         delivery_dir = None
         delivery_zip = None
