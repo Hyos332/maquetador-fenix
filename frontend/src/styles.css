@@ -373,6 +373,13 @@ a {
   font-size: 13px;
 }
 
+.folder-export-message {
+  margin: 0 0 14px;
+  color: #14755f;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
 .folder-output {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
