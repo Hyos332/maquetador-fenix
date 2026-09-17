@@ -28,6 +28,9 @@ class MetadataExtractor:
         second_title = self._paragraph_after(paragraphs, citation_index, offset=2)
         author_name = self._paragraph_after(paragraphs, citation_index, offset=3)
         author_details = self._paragraph_after(paragraphs, citation_index, offset=4)
+        author_extra_details = self._paragraph_after(paragraphs, citation_index, offset=5)
+        if author_extra_details and ("@" in author_extra_details or "orcid" in author_extra_details.casefold()):
+            author_details = f"{author_details or ''} {author_extra_details}".strip()
 
         if not first_title or not author_name:
             raise MetadataExtractionError("Could not identify article title and author.")
