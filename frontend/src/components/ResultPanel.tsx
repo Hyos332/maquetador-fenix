@@ -135,7 +135,7 @@ export function ResultPanel({ job, onReviewStarted }: ResultPanelProps) {
         <div className="folder-output">
           <FolderOpen size={20} />
           <div>
-            <h3>Carpeta organizada</h3>
+            <h3>Carpeta guardada en tu PC</h3>
             <code>{job.delivery_dir_path}</code>
           </div>
         </div>
@@ -151,7 +151,7 @@ export function ResultPanel({ job, onReviewStarted }: ResultPanelProps) {
         {deliveryUrl ? (
           <a className="button button--primary" href={deliveryUrl} target="_blank" rel="noreferrer">
             <FolderOpen size={17} />
-            Ver carpeta organizada
+            Ver archivos de la carpeta
           </a>
         ) : null}
         {epubUrl ? (
