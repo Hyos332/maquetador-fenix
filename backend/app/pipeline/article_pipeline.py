@@ -47,7 +47,7 @@ class ArticlePipeline:
         progress: Callable[[PipelineStatus, str], None] | None = None,
         abstract_overrides: dict[str, str] | None = None,
     ) -> PipelineResult:
-        self._notify(progress, PipelineStatus.ANALYZING, "Analizando ZIP y DOCX.")
+        self._notify(progress, PipelineStatus.ANALYZING, "Analizando documento.")
         package = self.zip_service.extract_article_zip(source_zip)
         parsed = self.docx_parser.parse(package.primary_docx)
         article = self.metadata_extractor.extract(parsed)
@@ -118,6 +118,7 @@ class ArticlePipeline:
                 html_path=final_html,
                 epub_path=epub_path,
                 assets_dir=package.workspace.generated_dir,
+                source_documents=[package.primary_docx, *package.pdf_files],
             )
 
         status = PipelineStatus.FAILED if errors else PipelineStatus.NEEDS_REVIEW if warnings else PipelineStatus.COMPLETED

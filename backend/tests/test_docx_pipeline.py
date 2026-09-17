@@ -1,11 +1,12 @@
 from datetime import date
 from pathlib import Path
+from zipfile import ZipFile
 
 import pytest
 
 from app.config.settings import Settings
 from app.pipeline.article_pipeline import ArticlePipeline
-from app.services.docx_parser import DocxParser, ParagraphBlock, TableBlock
+from app.services.docx_parser import DocxParser, ImageRelationship, ParagraphBlock, ParsedDocument, TableBlock
 from app.services.image_extractor import ImageExtractor
 from app.services.metadata_extractor import MetadataExtractor
 from app.services.reference_processor import ReferenceProcessor
@@ -84,6 +85,41 @@ def test_metadata_references_sections_and_images_from_alberto(parsed_alberto, tm
         "Agradecimientos",
         "Conflicto de intereses",
     ]
+
+
+def test_image_extractor_keeps_real_table_images_without_caption_and_skips_header_logo(tmp_path: Path) -> None:
+    docx_path = tmp_path / "article.docx"
+    tiny_png = (
+        b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01"
+        b"\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\rIDATx\x9cc\xf8\xff"
+        b"\xff?\x00\x05\xfe\x02\xfeA\xe2!\xbc\x00\x00\x00\x00IEND\xaeB`\x82"
+    )
+    with ZipFile(docx_path, "w") as archive:
+        archive.writestr("word/media/logo.png", tiny_png)
+        archive.writestr("word/media/figure.png", tiny_png)
+
+    parsed = ParsedDocument(
+        path=docx_path,
+        blocks=(
+            TableBlock(
+                index=1,
+                rows=(("MLS - EDUCATIONAL RESEARCH (MLSER) | ISSN: 2603-5820",),),
+                image_relationship_ids=("rLogo",),
+            ),
+            ParagraphBlock(index=2, text="Introduction"),
+            TableBlock(index=3, rows=(("",),), image_relationship_ids=("rFigure",)),
+        ),
+        image_relationships={
+            "rLogo": ImageRelationship("rLogo", "media/logo.png", "word/media/logo.png"),
+            "rFigure": ImageRelationship("rFigure", "media/figure.png", "word/media/figure.png"),
+        },
+    )
+
+    result = ImageExtractor().extract_figures(parsed, output_dir=tmp_path / "figures")
+
+    assert [figure.output_filename for figure in result.figures] == ["Figure_1.PNG"]
+    assert result.figures[0].caption is None
+    assert (tmp_path / "figures" / "Figure_1.PNG").exists()
 
 
 def test_article_pipeline_dry_run_uses_same_services(tmp_path: Path) -> None:

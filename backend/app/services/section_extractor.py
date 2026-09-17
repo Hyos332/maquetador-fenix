@@ -38,17 +38,18 @@ class SectionExtractor:
         }
 
         for block_index, block in enumerate(parsed.blocks):
+            if current_title and block_index in figures_by_block:
+                current_html.extend(
+                    f"<!-- FIGURE:{figure.number} -->"
+                    for figure in figures_by_block[block_index]
+                )
+                if isinstance(block, ParagraphBlock):
+                    continue
+
             if isinstance(block, ParagraphBlock):
                 normalized = normalize_for_match(block.text.rstrip(":"))
                 if normalized in {"referencias", "references"}:
                     break
-
-                if current_title and block_index in figures_by_block:
-                    current_html.extend(
-                        f"<!-- FIGURE:{figure.number} -->"
-                        for figure in figures_by_block[block_index]
-                    )
-                    continue
 
                 if block_index in caption_block_indexes:
                     continue
@@ -71,7 +72,7 @@ class SectionExtractor:
 
                 if current_title and block.text:
                     current_html.append(f"<p>{escape(block.text)}</p>")
-            elif isinstance(block, TableBlock) and current_title:
+            elif isinstance(block, TableBlock) and current_title and block.rows:
                 current_html.append(_table_to_html(block))
 
         if current_title:

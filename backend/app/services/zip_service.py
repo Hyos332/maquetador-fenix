@@ -5,6 +5,7 @@ import uuid
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
+import re
 
 from app.exceptions import DocumentNotFoundError, ZipValidationError
 from app.models.pipeline import WorkspacePaths
@@ -81,7 +82,8 @@ class ZipService:
         self._validate_source_docx(source_docx)
 
         workspace = self._create_workspace(job_id)
-        original_copy = workspace.original_dir / sanitize_filename(source_docx.name, "article.docx")
+        clean_name = self._clean_uploaded_filename(source_docx.name)
+        original_copy = workspace.original_dir / sanitize_filename(clean_name, "article.docx")
         extracted_copy = workspace.extracted_dir / original_copy.name
         shutil.copy2(source_docx, original_copy)
         shutil.copy2(source_docx, extracted_copy)
@@ -143,3 +145,6 @@ class ZipService:
             backups_dir=backups_dir,
             logs_dir=logs_dir,
         )
+
+    def _clean_uploaded_filename(self, filename: str) -> str:
+        return re.sub(r"^[a-f0-9]{32}_", "", filename, count=1)

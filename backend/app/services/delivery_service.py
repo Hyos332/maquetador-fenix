@@ -20,6 +20,7 @@ class DeliveryService:
         html_path: Path,
         epub_path: Path,
         assets_dir: Path,
+        source_documents: list[Path] | None = None,
     ) -> tuple[Path, Path]:
         author_name = article.authors[0].full_name if article.authors else "Articulo"
         author_dir_name = sanitize_filename(author_name, "Articulo")
@@ -33,6 +34,8 @@ class DeliveryService:
         delivery_epub = delivery_dir / f"{file_stem}_{language_suffix}.epub"
         shutil.copy2(html_path, delivery_html)
         shutil.copy2(epub_path, delivery_epub)
+        for source_document in source_documents or []:
+            self._copy_if_exists(source_document, delivery_dir / source_document.name)
 
         self._copy_if_exists(assets_dir / "galleys.css", delivery_dir / "galleys.css")
         self._copy_if_exists(assets_dir / journal.logo, delivery_dir / journal.logo)

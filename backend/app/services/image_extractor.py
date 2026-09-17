@@ -11,7 +11,7 @@ from zipfile import ZipFile
 from PIL import Image
 
 from app.models.article import Figure
-from app.services.docx_parser import ParagraphBlock, ParsedDocument
+from app.services.docx_parser import DocumentBlock, ParagraphBlock, ParsedDocument, TableBlock
 from app.utils.files import ensure_directory
 from app.utils.strings import normalize_for_match
 
@@ -33,16 +33,19 @@ class ImageExtractor:
         if output_dir:
             ensure_directory(output_dir)
 
+        seen_relationship_ids: set[str] = set()
         for block_index, block in enumerate(parsed.blocks):
-            if not isinstance(block, ParagraphBlock) or not block.image_relationship_ids:
+            if not block.image_relationship_ids or self._is_journal_header_image_block(block_index, block):
                 continue
 
             caption_match = self._find_caption(parsed, block_index)
-            if not caption_match:
-                continue
-            caption, caption_block_index = caption_match
+            caption, caption_block_index = caption_match if caption_match else (None, None)
 
             for relationship_id in block.image_relationship_ids:
+                if relationship_id in seen_relationship_ids:
+                    continue
+                seen_relationship_ids.add(relationship_id)
+
                 relationship = parsed.image_relationships.get(relationship_id)
                 if not relationship:
                     warnings.append(f"Image relationship not found: {relationship_id}")
@@ -69,7 +72,11 @@ class ImageExtractor:
         return ImageExtractionResult(figures=figures, warnings=warnings)
 
     def _find_caption(self, parsed: ParsedDocument, block_index: int) -> tuple[str, int] | None:
-        for candidate_index in (block_index + 1, block_index - 1):
+        candidate_indexes = [
+            block_index + offset
+            for offset in (1, -1, 2, -2, 3, -3)
+        ]
+        for candidate_index in candidate_indexes:
             if candidate_index < 0 or candidate_index >= len(parsed.blocks):
                 continue
 
@@ -78,10 +85,29 @@ class ImageExtractor:
                 continue
 
             normalized = normalize_for_match(candidate.text)
-            if normalized.startswith("figura ") or normalized.startswith("tabla "):
+            if (
+                normalized.startswith("figura ")
+                or normalized.startswith("figure ")
+                or normalized.startswith("tabla ")
+                or normalized.startswith("table ")
+                or normalized.startswith("fig. ")
+            ):
                 return candidate.text, candidate_index
 
         return None
+
+    def _is_journal_header_image_block(self, block_index: int, block: DocumentBlock) -> bool:
+        if block_index > 2:
+            return False
+
+        text = ""
+        if isinstance(block, ParagraphBlock):
+            text = block.text
+        elif isinstance(block, TableBlock):
+            text = " ".join(cell for row in block.rows for cell in row)
+
+        normalized = normalize_for_match(text)
+        return "issn" in normalized and ("mls" in normalized or "journal" in normalized)
 
     def _write_png(self, parsed: ParsedDocument, package_path: str, output_path: Path) -> None:
         suffix = Path(package_path).suffix.lower()
