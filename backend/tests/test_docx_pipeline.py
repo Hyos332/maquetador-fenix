@@ -15,6 +15,7 @@ from app.services.zip_service import ZipService
 
 ALBERTO_FIXTURE = Path("/home/luis.hoyos@ctdesarrollo-sdr.org/Descargas/Alberto Nilson.zip")
 ANTONIO_DOCX_FIXTURE = Path("/home/luis.hoyos@ctdesarrollo-sdr.org/Descargas/Antonio Abarca_Eng.docx")
+BESSY_DOCX_FIXTURE = Path("/home/luis.hoyos@ctdesarrollo-sdr.org/Documentos/Bessy Valeska_Eng.docx")
 
 
 @pytest.fixture()
@@ -154,3 +155,21 @@ def test_article_pipeline_accepts_english_docx_without_zip(tmp_path: Path) -> No
     assert len(result.article.references) == 35
     assert result.delivery_dir is not None
     assert result.delivery_dir.name.endswith("-eng")
+
+
+@pytest.mark.skipif(not BESSY_DOCX_FIXTURE.exists(), reason="Bessy DOCX fixture is not available")
+def test_article_pipeline_exports_word_charts_as_png_figures(tmp_path: Path) -> None:
+    settings = Settings(
+        workspaces_dir=tmp_path / "workspaces",
+        deliveries_dir=tmp_path / "deliveries",
+        dry_run=True,
+    )
+    result = ArticlePipeline(settings).run(BESSY_DOCX_FIXTURE)
+
+    assert [figure.output_filename for figure in result.article.figures] == [
+        "Figure_1.PNG",
+        "Figure_2.PNG",
+        "Figure_3.PNG",
+    ]
+    assert result.delivery_dir is not None
+    assert all((result.delivery_dir / f"Figure_{number}.PNG").exists() for number in range(1, 4))
