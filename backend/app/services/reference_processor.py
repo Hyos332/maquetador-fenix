@@ -14,13 +14,14 @@ class ReferenceProcessor:
     def extract(self, parsed: ParsedDocument) -> list[Reference]:
         references_started = False
         references: list[Reference] = []
+        unnumbered_references: list[str] = []
 
         for block in parsed.blocks:
             if not isinstance(block, ParagraphBlock) or not block.text:
                 continue
 
             normalized = normalize_for_match(block.text)
-            if normalized == "referencias":
+            if normalized in {"referencias", "references"}:
                 references_started = True
                 continue
 
@@ -29,6 +30,7 @@ class ReferenceProcessor:
 
             match = REFERENCE_PATTERN.match(block.text)
             if not match:
+                unnumbered_references.append(block.text.strip())
                 continue
 
             raw_text = match.group("text").strip()
@@ -39,6 +41,12 @@ class ReferenceProcessor:
                     urls=_extract_urls(raw_text),
                 )
             )
+
+        if not references and unnumbered_references:
+            references = [
+                Reference(number=index + 1, raw_text=raw_text, urls=_extract_urls(raw_text))
+                for index, raw_text in enumerate(unnumbered_references)
+            ]
 
         return references
 

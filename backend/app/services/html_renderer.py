@@ -5,6 +5,7 @@ from html import escape
 from pathlib import Path
 
 from app.models.article import Article, Figure, Reference
+from app.models.article import ArticleLanguage
 from app.models.journal import JournalConfig
 from app.utils.dates import format_short_spanish_date
 from app.utils.files import ensure_directory
@@ -30,8 +31,10 @@ class IntermediateHtmlRenderer:
         )
         references_html = "\n".join(self._render_reference(reference) for reference in article.references)
         citation_html = self._render_citation(article, journal)
-        title_en_html = self._render_translated_title(article.title_en)
-        abstract_en_html = self._render_abstract_en(article)
+        secondary_title = article.title_es if article.language == ArticleLanguage.ENGLISH else article.title_en
+        secondary_title_html = self._render_translated_title(secondary_title)
+        abstract_blocks_html = self._render_abstract_blocks(article)
+        references_title = "References" if article.language == ArticleLanguage.ENGLISH else "Referencias"
 
         return f"""<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
 <html>
@@ -67,17 +70,13 @@ class IntermediateHtmlRenderer:
         <p>{self._render_dates(article)}</p>
     </div>
 
-    <div>
-        <p><strong>Resumen: </strong>{escape(article.abstract_es or "")}</p>
-        <p><b>Palabras clave</b>: {escape(", ".join(article.keywords_es))}</p>
-    </div>
+    {abstract_blocks_html}
     <hr>
-    {title_en_html}
-    {abstract_en_html}
+    {secondary_title_html}
     <hr>
     {sections_html}
     <div>
-        <p class="title">Referencias</p>
+        <p class="title">{references_title}</p>
         {references_html}
     </div>
 </body>
@@ -177,6 +176,25 @@ class IntermediateHtmlRenderer:
         return (
             '<div id="article-title">'
             f'<p class="center-text"><b>{escape(title_en)}</b></p>'
+            "</div>"
+        )
+
+    def _render_abstract_blocks(self, article: Article) -> str:
+        if article.language == ArticleLanguage.ENGLISH:
+            return "\n".join(
+                block for block in (self._render_abstract_en(article), self._render_abstract_es(article)) if block
+            )
+        return "\n".join(
+            block for block in (self._render_abstract_es(article), self._render_abstract_en(article)) if block
+        )
+
+    def _render_abstract_es(self, article: Article) -> str:
+        if not article.abstract_es and not article.keywords_es:
+            return ""
+        return (
+            "<div>"
+            f"<p><strong>Resumen: </strong>{escape(article.abstract_es or '')}</p>"
+            f"<p><b>Palabras clave</b>: {escape(', '.join(article.keywords_es))}</p>"
             "</div>"
         )
 

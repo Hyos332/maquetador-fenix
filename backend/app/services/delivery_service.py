@@ -4,7 +4,7 @@ import shutil
 import zipfile
 from pathlib import Path
 
-from app.models.article import Article
+from app.models.article import Article, ArticleLanguage
 from app.models.journal import JournalConfig
 from app.utils.files import ensure_directory, sanitize_filename
 
@@ -24,12 +24,13 @@ class DeliveryService:
         author_name = article.authors[0].full_name if article.authors else "Articulo"
         author_dir_name = sanitize_filename(author_name, "Articulo")
         file_stem = author_dir_name.replace(" ", "_")
+        language_suffix = "eng" if article.language == ArticleLanguage.ENGLISH else "esp"
 
         author_dir = ensure_directory(self.deliveries_dir / author_dir_name)
-        delivery_dir = ensure_directory(author_dir / f"{author_dir_name}-esp")
+        delivery_dir = ensure_directory(author_dir / f"{author_dir_name}-{language_suffix}")
 
-        delivery_html = delivery_dir / f"{file_stem}_esp.html"
-        delivery_epub = delivery_dir / f"{file_stem}_esp.epub"
+        delivery_html = delivery_dir / f"{file_stem}_{language_suffix}.html"
+        delivery_epub = delivery_dir / f"{file_stem}_{language_suffix}.epub"
         shutil.copy2(html_path, delivery_html)
         shutil.copy2(epub_path, delivery_epub)
 

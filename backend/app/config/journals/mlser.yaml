@@ -1,0 +1,9 @@
+key: mlser
+name: "MLS - EDUCATIONAL RESEARCH (MLSER)"
+publisher: "Multi Lingual Scientific Journals"
+url: "https://www.mlsjournals.com/Educational-Research-Journal"
+issn: "2603-5820"
+logo: "logo-mlser.svg"
+image_style:
+  max_width_px: 700
+  max_height_px: 600
