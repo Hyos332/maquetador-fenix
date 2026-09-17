@@ -13,6 +13,7 @@ from app.services.section_extractor import SectionExtractor
 from app.services.zip_service import ZipService
 
 ALBERTO_FIXTURE = Path("/home/luis.hoyos@ctdesarrollo-sdr.org/Descargas/Alberto Nilson.zip")
+ANTONIO_DOCX_FIXTURE = Path("/home/luis.hoyos@ctdesarrollo-sdr.org/Descargas/Antonio Abarca_Eng.docx")
 
 
 @pytest.fixture()
@@ -97,3 +98,22 @@ def test_article_pipeline_dry_run_uses_same_services(tmp_path: Path) -> None:
     assert result.article.doi == "10.60134/mlshn.v5n1.4594"
     assert len(result.article.references) == 175
     assert result.workspace.generated_dir.exists()
+
+
+@pytest.mark.skipif(not ANTONIO_DOCX_FIXTURE.exists(), reason="Antonio DOCX fixture is not available")
+def test_article_pipeline_accepts_english_docx_without_zip(tmp_path: Path) -> None:
+    settings = Settings(
+        workspaces_dir=tmp_path / "workspaces",
+        deliveries_dir=tmp_path / "deliveries",
+        dry_run=True,
+    )
+    result = ArticlePipeline(settings).run(ANTONIO_DOCX_FIXTURE)
+
+    assert result.article is not None
+    assert result.article.journal == "mlser"
+    assert result.article.language == "en"
+    assert result.article.primary_title.startswith("ACTIVE METHODOLOGIES")
+    assert result.article.authors[0].email == "antonioabarcaz1@hotmail.com"
+    assert len(result.article.references) == 35
+    assert result.delivery_dir is not None
+    assert result.delivery_dir.name.endswith("-eng")
