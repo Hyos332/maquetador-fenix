@@ -31,7 +31,7 @@ docker compose up -d --build
 Abrir:
 
 ```text
-http://localhost:8000
+http://localhost:8095
 ```
 
 Comandos útiles:
@@ -55,7 +55,7 @@ Así no abre el maquetador externo y usa el HTML local determinista. Para usar P
 MLS_DRY_RUN: "false"
 ```
 
-El contenedor usa `network_mode: host` para que pueda acceder a la red interna igual que tu PC. Las salidas quedan persistidas en:
+El contenedor publica la aplicación en el puerto local `8095`. Las salidas quedan persistidas en:
 
 ```text
 ./workspaces
