@@ -173,6 +173,11 @@ class ArticlePipeline:
             self._write_journal_logo(output_dir / journal.logo, journal)
 
     def _write_journal_logo(self, output_path: Path, journal) -> None:
+        bundled_logo = Path(__file__).resolve().parents[1] / "config" / "assets" / journal.logo
+        if bundled_logo.exists():
+            shutil.copy2(bundled_logo, output_path)
+            return
+
         if journal.logo_source_url:
             try:
                 with urlopen(journal.logo_source_url, timeout=8) as response:

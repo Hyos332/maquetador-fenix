@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import threading
 import uuid
+import shutil
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from html import escape
@@ -69,6 +70,10 @@ class AbstractReviewRequest(BaseModel):
 
     abstract_es: str | None = None
     abstract_en: str | None = None
+
+
+class DeliveryExportResponse(BaseModel):
+    path: str
 
 
 jobs: dict[str, JobRecord] = {}
@@ -170,6 +175,25 @@ def get_job_delivery_archive(job_id: str) -> FileResponse:
         media_type="application/zip",
         filename=record.result.delivery_zip.name,
     )
+
+
+@router.post("/jobs/{job_id}/delivery/export-folder", response_model=DeliveryExportResponse)
+def export_job_delivery_folder(job_id: str) -> DeliveryExportResponse:
+    record = _get_record(job_id)
+    if not record.result or not record.result.delivery_dir:
+        raise HTTPException(status_code=404, detail="Entrega no disponible.")
+
+    downloads_dir = ensure_directory(app_settings.downloads_dir)
+    destination = _unique_folder_path(downloads_dir / record.result.delivery_dir.name)
+    shutil.copytree(record.result.delivery_dir, destination)
+
+    try:
+        relative_path = destination.relative_to(downloads_dir)
+        display_path = app_settings.downloads_display_dir / relative_path
+    except ValueError:
+        display_path = destination
+
+    return DeliveryExportResponse(path=str(display_path))
 
 
 @router.get("/jobs/{job_id}/delivery/files/{asset_name}")
@@ -290,6 +314,18 @@ def _delivery_dir_path(result: PipelineResult | None) -> str | None:
         return str(result.delivery_dir)
 
     return str(Path("deliveries") / relative_path)
+
+
+def _unique_folder_path(path: Path) -> Path:
+    if not path.exists():
+        return path
+
+    for index in range(1, 1000):
+        candidate = path.with_name(f"{path.name} ({index})")
+        if not candidate.exists():
+            return candidate
+
+    raise HTTPException(status_code=409, detail="No se pudo crear una carpeta única en Descargas.")
 
 
 def _render_delivery_folder(job_id: str, delivery_dir: Path) -> str:

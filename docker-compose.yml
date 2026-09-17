@@ -11,6 +11,8 @@ services:
       MLS_APP_NAME: "Maquetador MLS"
       MLS_WORKSPACES_DIR: "/data/workspaces"
       MLS_DELIVERIES_DIR: "/data/deliveries"
+      MLS_DOWNLOADS_DIR: "/data/downloads"
+      MLS_DOWNLOADS_DISPLAY_DIR: "/home/luis.hoyos@ctdesarrollo-sdr.org/Descargas"
       MLS_MAQUETADOR_URL: "http://172.22.104.76:8087/"
       MLS_DRY_RUN: "true"
       MLS_PLAYWRIGHT_HEADLESS: "true"
@@ -18,3 +20,4 @@ services:
     volumes:
       - ./workspaces:/data/workspaces
       - ./deliveries:/data/deliveries
+      - /home/luis.hoyos@ctdesarrollo-sdr.org/Descargas:/data/downloads

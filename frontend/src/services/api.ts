@@ -1,4 +1,9 @@
-import type { AbstractReviewPayload, CreateJobResponse, JobStatusResponse } from "../types/pipeline";
+import type {
+  AbstractReviewPayload,
+  CreateJobResponse,
+  DeliveryExportResponse,
+  JobStatusResponse,
+} from "../types/pipeline";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ?? (import.meta.env.DEV ? "http://localhost:8000" : window.location.origin);
@@ -41,6 +46,18 @@ export async function updateAbstracts(jobId: string, payload: AbstractReviewPayl
       "Content-Type": "application/json",
     },
     body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw new Error(await readApiError(response));
+  }
+
+  return response.json();
+}
+
+export async function exportDeliveryFolder(jobId: string): Promise<DeliveryExportResponse> {
+  const response = await fetch(resolveApiUrl(`/api/jobs/${jobId}/delivery/export-folder`), {
+    method: "POST",
   });
 
   if (!response.ok) {

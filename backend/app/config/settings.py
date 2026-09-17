@@ -10,6 +10,8 @@ class Settings(BaseModel):
     app_name: str = "Maquetador MLS"
     workspaces_dir: Path = Field(default=Path("../workspaces"))
     deliveries_dir: Path = Field(default=Path("../deliveries"))
+    downloads_dir: Path = Field(default=Path("../downloads"))
+    downloads_display_dir: Path = Field(default=Path("~/Descargas"))
     maquetador_url: str = "http://172.22.104.76:8087/"
     playwright_headless: bool = False
     dry_run: bool = True
@@ -29,6 +31,18 @@ class Settings(BaseModel):
                 os.getenv(
                     "MLS_DELIVERIES_DIR",
                     str(cls.model_fields["deliveries_dir"].default),
+                )
+            ),
+            downloads_dir=Path(
+                os.getenv(
+                    "MLS_DOWNLOADS_DIR",
+                    str(cls.model_fields["downloads_dir"].default),
+                )
+            ),
+            downloads_display_dir=Path(
+                os.getenv(
+                    "MLS_DOWNLOADS_DISPLAY_DIR",
+                    str(cls.model_fields["downloads_display_dir"].default),
                 )
             ),
             maquetador_url=os.getenv(

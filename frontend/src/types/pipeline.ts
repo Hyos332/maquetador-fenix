@@ -43,3 +43,7 @@ export interface AbstractReviewPayload {
   abstract_es?: string;
   abstract_en?: string;
 }
+
+export interface DeliveryExportResponse {
+  path: string;
+}

@@ -1,6 +1,6 @@
 import { Download, FileText, FolderOpen, Send } from "lucide-react";
 import { useEffect, useState } from "react";
-import { resolveApiUrl, updateAbstracts } from "../services/api";
+import { exportDeliveryFolder, resolveApiUrl, updateAbstracts } from "../services/api";
 import type { CreateJobResponse, JobStatusResponse } from "../types/pipeline";
 
 interface ResultPanelProps {
@@ -13,11 +13,16 @@ export function ResultPanel({ job, onReviewStarted }: ResultPanelProps) {
   const [abstractEn, setAbstractEn] = useState("");
   const [savingReview, setSavingReview] = useState(false);
   const [reviewError, setReviewError] = useState<string | null>(null);
+  const [exportingFolder, setExportingFolder] = useState(false);
+  const [exportedFolderPath, setExportedFolderPath] = useState<string | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   useEffect(() => {
     setAbstractEs(job?.abstract_es ?? "");
     setAbstractEn(job?.abstract_en ?? "");
     setReviewError(null);
+    setExportedFolderPath(null);
+    setExportError(null);
   }, [job?.job_id, job?.abstract_es, job?.abstract_en]);
 
   if (!job) {
@@ -30,7 +35,6 @@ export function ResultPanel({ job, onReviewStarted }: ResultPanelProps) {
   }
 
   const htmlUrl = job.html_url ? resolveApiUrl(job.html_url) : null;
-  const deliveryArchiveUrl = job.delivery_archive_url ? resolveApiUrl(job.delivery_archive_url) : null;
   const jobId = job.job_id;
   const abstractReview = getAbstractReviewState(job, abstractEs, abstractEn);
 
@@ -50,6 +54,19 @@ export function ResultPanel({ job, onReviewStarted }: ResultPanelProps) {
       setReviewError(error instanceof Error ? error.message : "No se pudo enviar la revisión.");
     } finally {
       setSavingReview(false);
+    }
+  }
+
+  async function saveFolderToDownloads() {
+    setExportingFolder(true);
+    setExportError(null);
+    try {
+      const result = await exportDeliveryFolder(jobId);
+      setExportedFolderPath(result.path);
+    } catch (error) {
+      setExportError(error instanceof Error ? error.message : "No se pudo guardar la carpeta.");
+    } finally {
+      setExportingFolder(false);
     }
   }
 
@@ -141,13 +158,16 @@ export function ResultPanel({ job, onReviewStarted }: ResultPanelProps) {
       ) : null}
 
       <div className="result-actions">
-        {deliveryArchiveUrl ? (
-          <a className="button button--primary" href={deliveryArchiveUrl}>
+        {job.delivery_dir_path ? (
+          <button className="button button--primary" type="button" disabled={exportingFolder} onClick={saveFolderToDownloads}>
             <Download size={17} />
-            Descargar carpeta completa
-          </a>
+            {exportingFolder ? "Guardando carpeta" : "Guardar carpeta en Descargas"}
+          </button>
         ) : null}
       </div>
+
+      {exportedFolderPath ? <p className="folder-export-message">Guardada en {exportedFolderPath}</p> : null}
+      {exportError ? <p className="review-error">{exportError}</p> : null}
 
       {htmlUrl ? <iframe className="preview" title="Vista previa HTML" src={htmlUrl} /> : null}
     </section>
