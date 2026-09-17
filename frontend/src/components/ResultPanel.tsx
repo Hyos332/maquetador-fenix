@@ -32,6 +32,7 @@ export function ResultPanel({ job, onReviewStarted }: ResultPanelProps) {
   const htmlUrl = job.html_url ? resolveApiUrl(job.html_url) : null;
   const epubUrl = job.epub_url ? resolveApiUrl(job.epub_url) : null;
   const deliveryUrl = job.delivery_url ? resolveApiUrl(job.delivery_url) : null;
+  const jobId = job.job_id;
   const abstractReview = getAbstractReviewState(job, abstractEs, abstractEn);
 
   async function submitAbstractReview() {
@@ -44,7 +45,7 @@ export function ResultPanel({ job, onReviewStarted }: ResultPanelProps) {
         ...(abstractReview.showEs ? { abstract_es: abstractEs } : {}),
         ...(abstractReview.showEn ? { abstract_en: abstractEn } : {}),
       };
-      const updated = await updateAbstracts(job.job_id, payload);
+      const updated = await updateAbstracts(jobId, payload);
       onReviewStarted(updated);
     } catch (error) {
       setReviewError(error instanceof Error ? error.message : "No se pudo enviar la revisión.");

@@ -304,6 +304,75 @@ a {
   color: #815b00;
 }
 
+.abstract-review {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 18px;
+  padding: 14px;
+  border: 1px solid #d9dee7;
+  border-radius: 8px;
+  background: #fbfcfe;
+}
+
+.abstract-review__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.abstract-review__header h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.abstract-review__header span,
+.abstract-field span {
+  color: #687182;
+  font-size: 13px;
+}
+
+.abstract-field {
+  display: grid;
+  gap: 6px;
+}
+
+.abstract-field span {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.abstract-field strong {
+  color: #1e6e4f;
+}
+
+.abstract-field strong.over-limit,
+.review-error {
+  color: #b42318;
+}
+
+.abstract-field textarea {
+  width: 100%;
+  min-height: 170px;
+  resize: vertical;
+  padding: 10px 12px;
+  border: 1px solid #c7cfdb;
+  border-radius: 6px;
+  color: #20242a;
+  font: inherit;
+  line-height: 1.45;
+}
+
+.abstract-field textarea:focus {
+  outline: 2px solid rgba(34, 124, 112, 0.24);
+  border-color: #227c70;
+}
+
+.review-error {
+  font-size: 13px;
+}
+
 .preview {
   width: 100%;
   height: 680px;
