@@ -1,10 +1,11 @@
 # Maquetador MLS local
 
-Aplicación web local para analizar un ZIP de artículo MLS, extraer metadatos desde DOCX/OOXML, generar HTML/EPUB validables y preparar una entrega limpia en ZIP.
+Aplicación web local para analizar un DOCX o ZIP de artículo MLS, extraer metadatos desde DOCX/OOXML, generar HTML/EPUB validables y preparar una entrega limpia en ZIP.
 
 ## Estado actual
 
 - Backend FastAPI con pipeline reutilizable por API y CLI.
+- Entrada por DOCX suelto o ZIP con DOCX/activos.
 - Parser DOCX por OOXML, preservando párrafos, tablas, imágenes y bloques `w:sdt`.
 - Extracción de DOI, fechas, autor, resumen/abstract, keywords, secciones, referencias e imágenes.
 - Conversión de imágenes a `Figure_N.PNG`, incluyendo EMF/WMF mediante LibreOffice.
@@ -108,13 +109,20 @@ VITE_API_BASE_URL=http://localhost:8000 npm run dev
 
 ```bash
 cd backend
-../.venv/bin/python -m app.cli maquetar "/home/luis.hoyos@ctdesarrollo-sdr.org/Descargas/Alberto Nilson.zip"
+../.venv/bin/python -m app.cli maquetar "/home/luis.hoyos@ctdesarrollo-sdr.org/Descargas/Antonio Abarca_Eng.docx"
 ```
 
 ## API
 
 ```bash
 curl -F "file=@/home/luis.hoyos@ctdesarrollo-sdr.org/Descargas/Alberto Nilson.zip" \
+  http://localhost:8000/api/jobs
+```
+
+Tambien acepta DOCX directo:
+
+```bash
+curl -F "file=@/home/luis.hoyos@ctdesarrollo-sdr.org/Descargas/Antonio Abarca_Eng.docx" \
   http://localhost:8000/api/jobs
 ```
 
