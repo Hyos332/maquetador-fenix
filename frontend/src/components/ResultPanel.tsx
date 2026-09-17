@@ -148,16 +148,16 @@ export function ResultPanel({ job, onReviewStarted }: ResultPanelProps) {
             Ver HTML
           </a>
         ) : null}
-        {epubUrl ? (
-          <a className="button button--primary" href={epubUrl}>
-            <Download size={17} />
-            Descargar EPUB
-          </a>
-        ) : null}
         {deliveryUrl ? (
           <a className="button button--primary" href={deliveryUrl}>
             <FolderOpen size={17} />
             Descargar carpeta completa
+          </a>
+        ) : null}
+        {epubUrl ? (
+          <a className="button button--secondary" href={epubUrl}>
+            <Download size={17} />
+            Descargar EPUB
           </a>
         ) : null}
       </div>
