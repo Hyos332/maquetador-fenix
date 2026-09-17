@@ -45,11 +45,13 @@ class ArticlePipeline:
         self,
         source_zip: Path,
         progress: Callable[[PipelineStatus, str], None] | None = None,
+        abstract_overrides: dict[str, str] | None = None,
     ) -> PipelineResult:
         self._notify(progress, PipelineStatus.ANALYZING, "Analizando ZIP y DOCX.")
         package = self.zip_service.extract_article_zip(source_zip)
         parsed = self.docx_parser.parse(package.primary_docx)
         article = self.metadata_extractor.extract(parsed)
+        self._apply_abstract_overrides(article, abstract_overrides)
         self._notify(progress, PipelineStatus.METADATA_EXTRACTED, "Metadatos extraídos.")
 
         article.sections = self.section_extractor.extract(parsed)
@@ -139,6 +141,14 @@ class ArticlePipeline:
         if count <= 250:
             return []
         return [f"{label} has {count} words; maximum allowed is 250."]
+
+    def _apply_abstract_overrides(self, article, abstract_overrides: dict[str, str] | None) -> None:
+        if not abstract_overrides:
+            return
+        if "abstract_es" in abstract_overrides:
+            article.abstract_es = abstract_overrides["abstract_es"].strip()
+        if "abstract_en" in abstract_overrides:
+            article.abstract_en = abstract_overrides["abstract_en"].strip()
 
     def _copy_input_assets(self, css_files: list[Path], logo_files: list[Path], output_dir: Path) -> None:
         if css_files:

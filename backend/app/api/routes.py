@@ -14,6 +14,7 @@ from app.config.settings import Settings, settings as app_settings
 from app.models.pipeline import PipelineResult, PipelineStatus
 from app.pipeline.article_pipeline import ArticlePipeline
 from app.utils.files import ensure_directory, sanitize_filename
+from app.utils.strings import word_count
 
 router = APIRouter(prefix="/api", tags=["jobs"])
 
@@ -49,9 +50,21 @@ class JobStatusResponse(BaseModel):
     doi: str | None = None
     references_count: int | None = None
     figures_count: int | None = None
+    abstract_es: str | None = None
+    abstract_en: str | None = None
+    abstract_es_word_count: int | None = None
+    abstract_en_word_count: int | None = None
+    abstract_word_limit: int = 250
     html_url: str | None = None
     epub_url: str | None = None
     delivery_url: str | None = None
+
+
+class AbstractReviewRequest(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    abstract_es: str | None = None
+    abstract_en: str | None = None
 
 
 jobs: dict[str, JobRecord] = {}
@@ -86,6 +99,33 @@ async def create_job(background_tasks: BackgroundTasks, file: UploadFile = File(
 def get_job(job_id: str) -> JobStatusResponse:
     record = _get_record(job_id)
     return _to_status_response(record)
+
+
+@router.patch("/jobs/{job_id}/abstracts", response_model=CreateJobResponse)
+def update_job_abstracts(
+    job_id: str,
+    payload: AbstractReviewRequest,
+    background_tasks: BackgroundTasks,
+) -> CreateJobResponse:
+    overrides = payload.model_dump(exclude_none=True)
+    if not overrides:
+        raise HTTPException(status_code=400, detail="Debes enviar al menos un resumen.")
+
+    with jobs_lock:
+        record = jobs.get(job_id)
+        if not record:
+            raise HTTPException(status_code=404, detail="Trabajo no encontrado.")
+        if record.status not in {PipelineStatus.COMPLETED, PipelineStatus.FAILED, PipelineStatus.NEEDS_REVIEW}:
+            raise HTTPException(status_code=409, detail="El trabajo todavía está en proceso.")
+        record.status = PipelineStatus.PENDING
+        record.message = "Regenerando con resúmenes revisados."
+        record.warnings = []
+        record.error = None
+        record.updated_at = datetime.now(UTC)
+        source_zip = record.source_zip
+
+    background_tasks.add_task(_run_job, job_id, source_zip, app_settings, overrides)
+    return CreateJobResponse(job_id=job_id, status=PipelineStatus.PENDING, message=record.message)
 
 
 @router.get("/jobs/{job_id}/html")
@@ -136,7 +176,12 @@ def get_job_asset(job_id: str, asset_name: str) -> FileResponse:
     return FileResponse(asset_path)
 
 
-def _run_job(job_id: str, source_zip: Path, runtime_settings: Settings) -> None:
+def _run_job(
+    job_id: str,
+    source_zip: Path,
+    runtime_settings: Settings,
+    abstract_overrides: dict[str, str] | None = None,
+) -> None:
     def progress(status: PipelineStatus, message: str) -> None:
         with jobs_lock:
             record = jobs[job_id]
@@ -145,7 +190,11 @@ def _run_job(job_id: str, source_zip: Path, runtime_settings: Settings) -> None:
             record.updated_at = datetime.now(UTC)
 
     try:
-        result = ArticlePipeline(runtime_settings).run(source_zip, progress=progress)
+        result = ArticlePipeline(runtime_settings).run(
+            source_zip,
+            progress=progress,
+            abstract_overrides=abstract_overrides,
+        )
         with jobs_lock:
             record = jobs[job_id]
             record.status = result.status
@@ -190,6 +239,10 @@ def _to_status_response(record: JobRecord) -> JobStatusResponse:
         doi=article.doi if article else None,
         references_count=len(article.references) if article else None,
         figures_count=len(article.figures) if article else None,
+        abstract_es=article.abstract_es if article else None,
+        abstract_en=article.abstract_en if article else None,
+        abstract_es_word_count=word_count(article.abstract_es) if article else None,
+        abstract_en_word_count=word_count(article.abstract_en) if article else None,
         html_url=html_url,
         epub_url=epub_url,
         delivery_url=delivery_url,

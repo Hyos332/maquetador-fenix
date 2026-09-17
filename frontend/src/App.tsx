@@ -3,7 +3,7 @@ import { Dropzone } from "./components/Dropzone";
 import { ProgressList } from "./components/ProgressList";
 import { ResultPanel } from "./components/ResultPanel";
 import { getJob, uploadArticleZip } from "./services/api";
-import type { JobStatusResponse, PipelineStatus } from "./types/pipeline";
+import type { CreateJobResponse, JobStatusResponse, PipelineStatus } from "./types/pipeline";
 import "./styles.css";
 
 const terminalStatuses: PipelineStatus[] = ["COMPLETED", "FAILED", "NEEDS_REVIEW"];
@@ -56,6 +56,22 @@ export default function App() {
     }
   }
 
+  function handleReviewStarted(updated: CreateJobResponse) {
+    setError(null);
+    setStatus(updated.status);
+    setMessage(updated.message);
+    setJob((current) =>
+      current
+        ? {
+            ...current,
+            status: updated.status,
+            message: updated.message,
+            warnings: [],
+          }
+        : current,
+    );
+  }
+
   return (
     <main className="app-shell">
       <section className="workspace">
@@ -67,7 +83,7 @@ export default function App() {
             <p>{error ?? message}</p>
           </section>
         </div>
-        <ResultPanel job={job} />
+        <ResultPanel job={job} onReviewStarted={handleReviewStarted} />
       </section>
     </main>
   );
