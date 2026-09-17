@@ -149,9 +149,9 @@ export function ResultPanel({ job, onReviewStarted }: ResultPanelProps) {
           </a>
         ) : null}
         {deliveryUrl ? (
-          <a className="button button--primary" href={deliveryUrl}>
+          <a className="button button--primary" href={deliveryUrl} target="_blank" rel="noreferrer">
             <FolderOpen size={17} />
-            Descargar carpeta completa
+            Ver carpeta organizada
           </a>
         ) : null}
         {epubUrl ? (

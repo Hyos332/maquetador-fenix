@@ -4,10 +4,12 @@ import threading
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from html import escape
 from pathlib import Path
+from urllib.parse import quote
 
 from fastapi import APIRouter, BackgroundTasks, File, HTTPException, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel, ConfigDict
 
 from app.config.settings import Settings, settings as app_settings
@@ -150,15 +152,27 @@ def get_job_epub(job_id: str) -> FileResponse:
 
 
 @router.get("/jobs/{job_id}/delivery")
-def get_job_delivery(job_id: str) -> FileResponse:
+def get_job_delivery(job_id: str) -> HTMLResponse:
     record = _get_record(job_id)
-    if not record.result or not record.result.delivery_zip:
+    if not record.result or not record.result.delivery_dir:
         raise HTTPException(status_code=404, detail="Entrega no disponible.")
-    return FileResponse(
-        record.result.delivery_zip,
-        media_type="application/zip",
-        filename=record.result.delivery_zip.name,
-    )
+    return HTMLResponse(_render_delivery_folder(record.job_id, record.result.delivery_dir))
+
+
+@router.get("/jobs/{job_id}/delivery/files/{asset_name}")
+def get_delivery_file(job_id: str, asset_name: str) -> FileResponse:
+    if "/" in asset_name or "\\" in asset_name or asset_name in {"", ".", ".."}:
+        raise HTTPException(status_code=400, detail="Nombre de recurso inválido.")
+
+    record = _get_record(job_id)
+    if not record.result or not record.result.delivery_dir:
+        raise HTTPException(status_code=404, detail="Entrega no disponible.")
+
+    asset_path = record.result.delivery_dir / asset_name
+    if not asset_path.exists() or not asset_path.is_file():
+        raise HTTPException(status_code=404, detail="Archivo no encontrado.")
+
+    return FileResponse(asset_path, filename=asset_path.name)
 
 
 @router.get("/jobs/{job_id}/{asset_name}")
@@ -224,11 +238,7 @@ def _to_status_response(record: JobRecord) -> JobStatusResponse:
     article = record.result.article if record.result else None
     html_url = f"/api/jobs/{record.job_id}/html" if record.result and record.result.html_path else None
     epub_url = f"/api/jobs/{record.job_id}/epub" if record.result and record.result.epub_path else None
-    delivery_url = (
-        f"/api/jobs/{record.job_id}/delivery"
-        if record.result and record.result.delivery_zip
-        else None
-    )
+    delivery_url = f"/api/jobs/{record.job_id}/delivery" if record.result and record.result.delivery_dir else None
 
     return JobStatusResponse(
         job_id=record.job_id,
@@ -261,3 +271,67 @@ def _delivery_dir_path(result: PipelineResult | None) -> str | None:
         return str(result.delivery_dir)
 
     return str(Path("deliveries") / relative_path)
+
+
+def _render_delivery_folder(job_id: str, delivery_dir: Path) -> str:
+    files = sorted(path for path in delivery_dir.iterdir() if path.is_file())
+    rows = "\n".join(_render_delivery_row(job_id, path) for path in files)
+    folder_name = escape(delivery_dir.name)
+    folder_path = escape(str(delivery_dir))
+
+    return f"""<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{folder_name}</title>
+  <style>
+    body {{ margin: 0; font-family: Arial, Helvetica, sans-serif; color: #17202a; background: #f6f8fb; }}
+    main {{ max-width: 1100px; margin: 36px auto; padding: 0 20px; }}
+    h1 {{ margin: 0 0 6px; font-size: 28px; }}
+    code {{ color: #576175; }}
+    table {{ width: 100%; margin-top: 24px; border-collapse: collapse; background: white; border: 1px solid #d7dee8; }}
+    th, td {{ padding: 13px 16px; border-bottom: 1px solid #e5eaf1; text-align: left; }}
+    th {{ font-size: 13px; color: #667085; background: #f9fafb; }}
+    a {{ color: #0f766e; font-weight: 700; text-decoration: none; }}
+    a:hover {{ text-decoration: underline; }}
+  </style>
+</head>
+<body>
+  <main>
+    <h1>{folder_name}</h1>
+    <code>{folder_path}</code>
+    <table>
+      <thead>
+        <tr>
+          <th>Archivo</th>
+          <th>Tamaño</th>
+          <th>Acción</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows}
+      </tbody>
+    </table>
+  </main>
+</body>
+</html>"""
+
+
+def _render_delivery_row(job_id: str, path: Path) -> str:
+    name = escape(path.name)
+    href = f"/api/jobs/{job_id}/delivery/files/{quote(path.name)}"
+    size = _format_size(path.stat().st_size)
+    return f"""<tr>
+  <td>{name}</td>
+  <td>{size}</td>
+  <td><a href="{href}" target="_blank" rel="noreferrer">Abrir</a></td>
+</tr>"""
+
+
+def _format_size(size: int) -> str:
+    if size < 1024:
+        return f"{size} B"
+    if size < 1024 * 1024:
+        return f"{size / 1024:.0f} KB"
+    return f"{size / (1024 * 1024):.1f} MB"
