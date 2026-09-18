@@ -32,7 +32,7 @@ class MlsPage:
 
     def open(self) -> None:
         self.page.goto(self.base_url, wait_until="networkidle")
-        expect(self.page.get_by_text("MAQUETADOR DE ARTÍCULOS")).to_be_visible(
+        expect(self.page.get_by_role("heading", name="MAQUETADOR DE ARTÍCULOS", exact=True)).to_be_visible(
             timeout=self.timeout_ms,
         )
 
@@ -144,7 +144,20 @@ class MlsPage:
         self.page.locator(selector).fill(value)
 
     def _fill_by_placeholder(self, placeholder: str, value: str) -> None:
-        self.page.get_by_placeholder(placeholder).fill(value)
+        locator = self.page.get_by_placeholder(placeholder).first()
+        locator.wait_for(state="attached", timeout=self.timeout_ms)
+        locator.evaluate(
+            """(element, value) => {
+                element.value = value;
+                element.dispatchEvent(new InputEvent('input', {
+                    bubbles: true,
+                    inputType: 'insertText',
+                    data: value
+                }));
+                element.dispatchEvent(new Event('change', { bubbles: true }));
+            }""",
+            value,
+        )
 
     def _build_citation(self, article: Article) -> str:
         if not article.authors:

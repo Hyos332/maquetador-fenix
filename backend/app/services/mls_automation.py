@@ -6,7 +6,7 @@ from playwright.sync_api import sync_playwright
 
 from app.automation.mls_page import MlsPage
 from app.config.settings import Settings
-from app.models.article import Article
+from app.models.article import Article, ArticleLanguage
 
 
 class MlsAutomationService:
@@ -23,8 +23,16 @@ class MlsAutomationService:
                     downloads_dir=output_path.parent,
                 )
                 mls_page.open()
-                mls_page.select_language("Español")
+                mls_page.select_language(_maquetador_language(article.language))
                 mls_page.fill_article(article)
                 return mls_page.generate_and_download_html(output_path)
             finally:
                 browser.close()
+
+
+def _maquetador_language(language: ArticleLanguage) -> str:
+    return {
+        ArticleLanguage.ENGLISH: "English",
+        ArticleLanguage.PORTUGUESE: "Português",
+        ArticleLanguage.SPANISH: "Español",
+    }.get(language, "Español")
