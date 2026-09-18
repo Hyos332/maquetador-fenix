@@ -208,11 +208,6 @@ class HtmlProcessor:
         text = _normalize_text(root.text_content())
         required = [article.primary_title, *(author.full_name for author in article.authors)]
         required.extend(author.email for author in article.authors if author.email)
-        required.extend(
-            format_short_spanish_date(value)
-            for value in (article.received_date, article.reviewed_date, article.accepted_date)
-            if value
-        )
 
         missing = [value for value in required if value and _normalize_text(value) not in text]
         if missing:

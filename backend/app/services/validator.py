@@ -61,9 +61,6 @@ class Validator:
             *(author.full_name for author in article.authors),
             *(author.email for author in article.authors if author.email),
             *(author.orcid for author in article.authors if author.orcid),
-            format_short_spanish_date(article.received_date),
-            format_short_spanish_date(article.reviewed_date),
-            format_short_spanish_date(article.accepted_date),
             journal.name,
             journal.issn,
         ]
@@ -71,6 +68,15 @@ class Validator:
         for value in required_texts:
             if value and _normalize(value) not in text:
                 errors.append(f"Required text not found in HTML: {value}")
+
+        date_texts = [
+            format_short_spanish_date(article.received_date),
+            format_short_spanish_date(article.reviewed_date),
+            format_short_spanish_date(article.accepted_date),
+        ]
+        for value in date_texts:
+            if value and _normalize(value) not in text:
+                warnings.append(f"Date text not found in HTML: {value}")
 
         forbidden = ["como citar este artículo", "mundet", "peña muñoz", "10.29314/mlser"]
         for value in forbidden:

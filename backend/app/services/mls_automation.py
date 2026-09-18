@@ -33,6 +33,6 @@ class MlsAutomationService:
 def _maquetador_language(language: ArticleLanguage) -> str:
     return {
         ArticleLanguage.ENGLISH: "English",
-        ArticleLanguage.PORTUGUESE: "Português",
+        ArticleLanguage.PORTUGUESE: "Portugese",
         ArticleLanguage.SPANISH: "Español",
     }.get(language, "Español")
