@@ -16,8 +16,6 @@ def test_api_creates_job_and_exposes_outputs(tmp_path, monkeypatch) -> None:
         Settings(
             workspaces_dir=tmp_path / "workspaces",
             deliveries_dir=tmp_path / "deliveries",
-            downloads_dir=tmp_path / "downloads",
-            downloads_display_dir=Path("/home/test/Descargas"),
             dry_run=True,
         ),
     )
@@ -51,11 +49,9 @@ def test_api_creates_job_and_exposes_outputs(tmp_path, monkeypatch) -> None:
     assert "text/html" in delivery_response.headers["content-type"]
     assert "Alberto_Nilson_esp.html" in delivery_response.text
     assert client.get(f"/api/jobs/{job_id}/delivery/files/Alberto_Nilson_esp.html").status_code == 200
-    export_response = client.post(f"/api/jobs/{job_id}/delivery/export-folder")
-    assert export_response.status_code == 200
-    exported_path = export_response.json()["path"]
-    assert exported_path.startswith("/home/test/Descargas/Alberto Nilson-esp")
-    assert (tmp_path / "downloads" / "Alberto Nilson-esp" / "Alberto_Nilson_esp.html").exists()
+    archive_response = client.get(payload["delivery_archive_url"])
+    assert archive_response.status_code == 200
+    assert "application/zip" in archive_response.headers["content-type"]
     assert client.get(f"/api/jobs/{job_id}/galleys.css").status_code == 200
     assert client.get(f"/api/jobs/{job_id}/Figure_1.PNG").status_code == 200
 

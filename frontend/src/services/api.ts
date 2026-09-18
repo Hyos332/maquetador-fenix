@@ -1,7 +1,6 @@
 import type {
   AbstractReviewPayload,
   CreateJobResponse,
-  DeliveryExportResponse,
   JobStatusResponse,
 } from "../types/pipeline";
 
@@ -46,18 +45,6 @@ export async function updateAbstracts(jobId: string, payload: AbstractReviewPayl
       "Content-Type": "application/json",
     },
     body: JSON.stringify(payload),
-  });
-
-  if (!response.ok) {
-    throw new Error(await readApiError(response));
-  }
-
-  return response.json();
-}
-
-export async function exportDeliveryFolder(jobId: string): Promise<DeliveryExportResponse> {
-  const response = await fetch(resolveApiUrl(`/api/jobs/${jobId}/delivery/export-folder`), {
-    method: "POST",
   });
 
   if (!response.ok) {
