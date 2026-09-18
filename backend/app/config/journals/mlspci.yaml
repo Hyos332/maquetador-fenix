@@ -2,8 +2,9 @@ key: mlspci
 name: "MLS - PEDAGOGY, CULTURE AND INNOVATION (MLSPCI)"
 publisher: "Multi Lingual Scientific Journals"
 url: "https://www.mlsjournals.com/pedagogy-culture-innovation"
-issn: ""
+issn: "3045-5979"
 logo: "logo-mlspci.svg"
+logo_source_url: "https://www.mlsjournals.com/public/journals/8/pageHeaderLogoImage_es.svg"
 image_style:
   max_width_px: 700
   max_height_px: 600
