@@ -47,12 +47,12 @@ class HtmlProcessor:
         warnings.extend(self._extract_base64_images(root, output_path.parent))
         self._apply_figure_policy(root, journal)
         self._linkify_urls(root)
+        self._normalize_orcid_links(root)
         root = self._remove_generic_citation_with_rollback(root, article)
 
-        output_path.write_text(
-            etree.tostring(root, encoding="unicode", method="html", pretty_print=True),
-            encoding="utf-8",
-        )
+        output_html = etree.tostring(root, encoding="unicode", method="html", pretty_print=True)
+        output_html = self._restore_article_dates(output_html, article)
+        output_path.write_text(output_html, encoding="utf-8")
         return HtmlProcessResult(output_path=output_path, warnings=warnings)
 
     def _localize_stylesheets(self, root: html.HtmlElement) -> None:
@@ -62,8 +62,35 @@ class HtmlProcessor:
                 link.set("href", "galleys.css")
 
     def _apply_journal_assets(self, root: html.HtmlElement, journal: JournalConfig) -> None:
-        for image in root.xpath("//img[contains(translate(@class, 'LOGO', 'logo'), 'logo')]"):
+        for image in root.xpath("//img[@src]"):
+            source = Path(image.get("src", "")).name.casefold()
+            image_class = image.get("class", "").casefold()
+            if "logo" not in image_class and source != "logos-null.svg":
+                continue
             image.set("src", journal.logo)
+            if "journal-logo" not in image_class:
+                image.set("class", f"{image.get('class', '').strip()} journal-logo".strip())
+
+    def _restore_article_dates(self, html_content: str, article: Article) -> str:
+        dates = [
+            format_short_spanish_date(article.received_date),
+            format_short_spanish_date(article.reviewed_date),
+            format_short_spanish_date(article.accepted_date),
+        ]
+        for date_text in dates:
+            if date_text:
+                html_content = html_content.replace("00/00/0000", date_text, 1)
+        return html_content
+
+    def _normalize_orcid_links(self, root: html.HtmlElement) -> None:
+        for link in root.xpath("//a[contains(@href, 'orcid.org/')]"):
+            href = link.get("href", "")
+            normalized = _normalize_orcid_url(href)
+            if not normalized:
+                continue
+            link.set("href", normalized)
+            if link.text and "orcid.org/" in link.text:
+                link.text = normalized
 
     def _extract_base64_images(self, root: html.HtmlElement, output_dir: Path) -> list[str]:
         warnings: list[str] = []
@@ -217,3 +244,10 @@ class HtmlProcessor:
 
 def _normalize_text(value: str) -> str:
     return " ".join(value.casefold().split())
+
+
+def _normalize_orcid_url(value: str) -> str | None:
+    match = re.search(r"(\d{4}-\d{4}-\d{4}-[\dX]{4})", value, flags=re.I)
+    if not match:
+        return None
+    return f"https://orcid.org/{match.group(1).upper()}"
