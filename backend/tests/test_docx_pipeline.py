@@ -16,6 +16,10 @@ from app.services.zip_service import ZipService
 ALBERTO_FIXTURE = Path("/home/luis.hoyos@ctdesarrollo-sdr.org/Descargas/Alberto Nilson.zip")
 ANTONIO_DOCX_FIXTURE = Path("/home/luis.hoyos@ctdesarrollo-sdr.org/Descargas/Antonio Abarca_Eng.docx")
 BESSY_DOCX_FIXTURE = Path("/home/luis.hoyos@ctdesarrollo-sdr.org/Documentos/Bessy Valeska_Eng.docx")
+CARBALLIDO_DOCX_FIXTURE = Path(
+    "/home/luis.hoyos@ctdesarrollo-sdr.org/Escritorio/felipe.hoyos/maquetador-fenix/"
+    "workspaces/ca63247341c948c3bb39414b03de5b3a/extracted/1. Carballidp Perea-Eng.docx"
+)
 
 
 @pytest.fixture()
@@ -173,3 +177,26 @@ def test_article_pipeline_exports_word_charts_as_png_figures(tmp_path: Path) -> 
     ]
     assert result.delivery_dir is not None
     assert all((result.delivery_dir / f"Figure_{number}.PNG").exists() for number in range(1, 4))
+
+
+@pytest.mark.skipif(not CARBALLIDO_DOCX_FIXTURE.exists(), reason="Carballido DOCX fixture is not available")
+def test_article_pipeline_accepts_mlspci_front_matter_docx(tmp_path: Path) -> None:
+    settings = Settings(
+        workspaces_dir=tmp_path / "workspaces",
+        deliveries_dir=tmp_path / "deliveries",
+        dry_run=True,
+    )
+    result = ArticlePipeline(settings).run(CARBALLIDO_DOCX_FIXTURE)
+
+    assert result.article is not None
+    assert result.article.journal == "mlspci"
+    assert result.article.language == "en"
+    assert result.article.primary_title.startswith("Geodidactic proposal")
+    assert [author.email for author in result.article.authors] == [
+        "aurigeo33@gmail.com",
+        "acazares@upn.mx",
+    ]
+    assert [figure.output_filename for figure in result.article.figures] == ["Figure_1.PNG", "Figure_2.PNG"]
+    assert result.delivery_dir is not None
+    assert result.delivery_dir.name == "Aurea Barbara Carballido Perea-eng"
+    assert all((result.delivery_dir / f"Figure_{number}.PNG").exists() for number in range(1, 3))

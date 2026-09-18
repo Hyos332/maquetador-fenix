@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import unicodedata
 from pathlib import Path
 
 
@@ -8,7 +9,8 @@ SAFE_FILENAME_PATTERN = re.compile(r"[^A-Za-z0-9._ -]+")
 
 
 def sanitize_filename(name: str, fallback: str = "archivo") -> str:
-    cleaned = SAFE_FILENAME_PATTERN.sub("_", name).strip(" ._")
+    ascii_name = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode("ascii")
+    cleaned = SAFE_FILENAME_PATTERN.sub("_", ascii_name).strip(" ._")
     return cleaned or fallback
 
 

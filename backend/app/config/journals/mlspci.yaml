@@ -1,0 +1,9 @@
+key: mlspci
+name: "MLS - PEDAGOGY, CULTURE AND INNOVATION (MLSPCI)"
+publisher: "Multi Lingual Scientific Journals"
+url: "https://www.mlsjournals.com/pedagogy-culture-innovation"
+issn: ""
+logo: "logo-mlspci.svg"
+image_style:
+  max_width_px: 700
+  max_height_px: 600

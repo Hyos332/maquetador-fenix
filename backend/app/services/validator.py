@@ -33,7 +33,7 @@ class Validator:
         if not article.authors:
             errors.append("Article has no authors.")
         if not article.doi:
-            errors.append("Article DOI is missing.")
+            warnings.append("Article DOI is missing.")
         if not article.accepted_date:
             errors.append("Accepted date is missing.")
 

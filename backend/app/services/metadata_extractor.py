@@ -15,12 +15,16 @@ DATE_PATTERNS = {
     "reviewed_date": re.compile(r"(?:Revisado|Reviewed)\s*:?\s*(\d{2}/\d{2}/\d{2})", re.I),
     "accepted_date": re.compile(r"(?:Aceptado|Accepted)\s*:?\s*(\d{2}/\d{2}/\d{2})", re.I),
 }
-VOLUME_PATTERN = re.compile(r"\b(?P<volume>\d+)\((?P<issue>\d+)\),\s*(?P<pages>\d+\s*-\s*\d+)")
+VOLUME_PATTERN = re.compile(r"\b(?P<volume>\d+)\((?P<issue>\d+)\)\s*[,.;]\s*(?P<pages>\d+\s*-\s*\d+)")
 
 
 class MetadataExtractor:
     def extract(self, parsed: ParsedDocument) -> Article:
         paragraphs = [block for block in parsed.blocks if isinstance(block, ParagraphBlock) and block.text]
+        header_article = self._extract_header_article(parsed, paragraphs)
+        if header_article:
+            return header_article
+
         doi = self._extract_doi(parsed.full_text)
         citation_index = self._find_citation_index(paragraphs, doi)
 
@@ -93,15 +97,90 @@ class MetadataExtractor:
             return None
         return paragraphs[target].text
 
+    def _extract_header_article(
+        self,
+        parsed: ParsedDocument,
+        paragraphs: list[ParagraphBlock],
+    ) -> Article | None:
+        manuscript_index = next(
+            (
+                index
+                for index, paragraph in enumerate(paragraphs)
+                if normalize_for_match(paragraph.text).startswith("manuscript information")
+            ),
+            None,
+        )
+        if manuscript_index is None or manuscript_index < 3:
+            return None
+
+        citation_index = self._find_header_citation_index(paragraphs[:manuscript_index])
+        title_start = citation_index + 1 if citation_index is not None else 0
+        if title_start + 1 >= manuscript_index:
+            return None
+
+        first_title = paragraphs[title_start].text
+        second_title = paragraphs[title_start + 1].text
+        author_paragraphs = paragraphs[title_start + 2 : manuscript_index]
+        authors = [
+            self._build_author(author_paragraphs[index].text, author_paragraphs[index + 1].text)
+            for index in range(0, len(author_paragraphs) - 1, 2)
+            if author_paragraphs[index].text and author_paragraphs[index + 1].text
+        ]
+        if not authors:
+            return None
+
+        front_text = self._front_matter_text(parsed)
+        dates = self._extract_dates(front_text)
+        volume, issue, pages = self._extract_volume_issue_pages(
+            paragraphs[citation_index].text if citation_index is not None else ""
+        )
+        abstract_es, keywords_es, abstract_en, keywords_en, language = self._extract_abstract_table(parsed)
+        title_es, title_en = _assign_titles(first_title, second_title, language)
+
+        return Article(
+            language=language,
+            journal=self._extract_journal_key(front_text or parsed.full_text),
+            title_es=title_es,
+            title_en=title_en,
+            abstract_es=abstract_es,
+            abstract_en=abstract_en,
+            keywords_es=keywords_es,
+            keywords_en=keywords_en,
+            authors=authors,
+            doi=self._extract_doi(front_text),
+            volume=volume,
+            issue=issue,
+            pages=pages,
+            **dates,
+        )
+
+    def _find_header_citation_index(self, paragraphs: list[ParagraphBlock]) -> int | None:
+        for index, paragraph in enumerate(paragraphs[:3]):
+            if VOLUME_PATTERN.search(paragraph.text):
+                return index
+        return None
+
+    def _front_matter_text(self, parsed: ParsedDocument) -> str:
+        parts: list[str] = []
+        for block in parsed.blocks:
+            if isinstance(block, ParagraphBlock):
+                if normalize_for_match(block.text) in {"introduction", "introduccion", "introducao"}:
+                    break
+                parts.append(block.text)
+            else:
+                parts.extend(cell for row in block.rows for cell in row)
+        return "\n".join(part for part in parts if part)
+
     def _build_author(self, full_name: str | None, details: str | None) -> Author:
         details = details or ""
         email_match = EMAIL_PATTERN.search(details)
-        institution = normalize_whitespace(details.split("(", 1)[0]) or None
+        institution, country = _parse_institution_country(details)
 
         return Author(
             full_name=full_name or "",
             email=email_match.group(0) if email_match else None,
             institution=institution,
+            country=country,
             orcid=details,
         )
 
@@ -163,6 +242,8 @@ class MetadataExtractor:
 
     def _extract_journal_key(self, text: str) -> str:
         normalized = normalize_for_match(text)
+        if "mlspci" in normalized or "pedagogy, culture and innovation" in normalized:
+            return "mlspci"
         if "mls - educational research" in normalized or "mlser" in normalized:
             return "mlser"
         if "health" in normalized and "nutrition" in normalized:
@@ -181,6 +262,26 @@ def _split_keywords(value: str) -> list[str]:
         return []
     raw_keywords = value.split(":", 1)[1].replace("|", " ")
     return [normalize_whitespace(keyword) for keyword in raw_keywords.split(",") if keyword.strip()]
+
+
+def _parse_institution_country(details: str) -> tuple[str | None, str | None]:
+    before_parentheses = normalize_whitespace(details.split("(", 1)[0])
+    parenthetical_countries = [
+        value
+        for value in re.findall(r"\(([^()@]*?)\)", details)
+        if "http" not in value.casefold() and "orcid" not in value.casefold()
+    ]
+    country = next((normalize_whitespace(value) for value in parenthetical_countries if value.strip()), None)
+    institution = before_parentheses or None
+
+    if before_parentheses and "," in before_parentheses:
+        possible_institution, possible_country = before_parentheses.rsplit(",", 1)
+        possible_country = normalize_whitespace(possible_country)
+        if possible_country and len(possible_country.split()) <= 4:
+            institution = normalize_whitespace(possible_institution) or institution
+            country = country or possible_country
+
+    return institution, country
 
 
 def _assign_titles(
