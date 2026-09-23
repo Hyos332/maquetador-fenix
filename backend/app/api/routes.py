@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import threading
+import subprocess
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -15,7 +16,6 @@ from pydantic import BaseModel, ConfigDict
 from app.config.settings import Settings, settings as app_settings
 from app.models.pipeline import PipelineResult, PipelineStatus
 from app.pipeline.article_pipeline import ArticlePipeline
-from app.services.docx_parser import DocxParser, ParagraphBlock, TableBlock
 from app.utils.files import ensure_directory, sanitize_filename
 from app.utils.strings import word_count
 
@@ -146,17 +146,20 @@ def get_job_html(job_id: str) -> FileResponse:
 
 
 @router.get("/jobs/{job_id}/source-preview")
-def get_job_source_preview(job_id: str) -> HTMLResponse:
+def get_job_source_preview(job_id: str) -> FileResponse:
     record = _get_record(job_id)
     if not record.result or not record.result.article:
         raise HTTPException(status_code=404, detail="Vista DOCX no disponible.")
 
-    source_docx = _source_docx_for_preview(record)
-    if not source_docx:
+    source_pdf = _source_pdf_for_preview(record)
+    if not source_pdf:
         raise HTTPException(status_code=404, detail="DOCX original no disponible.")
 
-    parsed = DocxParser().parse(source_docx)
-    return HTMLResponse(_render_docx_preview(record.job_id, parsed, record.result))
+    return FileResponse(
+        source_pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{source_pdf.name}"'},
+    )
 
 
 @router.get("/jobs/{job_id}/epub")
@@ -396,71 +399,40 @@ def _source_docx_for_preview(record: JobRecord) -> Path | None:
     return None
 
 
-def _render_docx_preview(job_id: str, parsed, result: PipelineResult) -> str:
-    article = result.article
-    figures_by_block: dict[int, list] = {}
-    if article:
-        for figure in article.figures:
-            if figure.block_index is not None:
-                figures_by_block.setdefault(figure.block_index, []).append(figure)
+def _source_pdf_for_preview(record: JobRecord) -> Path | None:
+    source_docx = _source_docx_for_preview(record)
+    if not source_docx or not record.result:
+        return None
 
-    body_parts: list[str] = []
-    for block_index, block in enumerate(parsed.blocks):
-        if block_index in figures_by_block:
-            body_parts.extend(_render_source_figure(job_id, figure) for figure in figures_by_block[block_index])
+    preview_dir = ensure_directory(record.result.workspace.generated_dir / "source-preview")
+    expected_pdf = preview_dir / f"{source_docx.stem}.pdf"
+    if expected_pdf.exists():
+        return expected_pdf
 
-        if isinstance(block, ParagraphBlock):
-            if block.text:
-                body_parts.append(f"<p>{escape(block.text)}</p>")
-        elif isinstance(block, TableBlock):
-            if block.image_relationship_ids or block.chart_relationship_ids:
-                table_text = _table_text(block)
-                if table_text:
-                    body_parts.append(f'<p class="embedded-text">{escape(table_text)}</p>')
-                continue
-            body_parts.append(_render_source_table(block))
+    try:
+        result = subprocess.run(
+            [
+                "libreoffice",
+                "--headless",
+                "--convert-to",
+                "pdf",
+                "--outdir",
+                str(preview_dir),
+                str(source_docx),
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
 
-    title = escape(article.primary_title if article else parsed.path.stem)
-    return f"""<!doctype html>
-<html lang="es">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>DOCX original - {title}</title>
-  <style>
-    body {{ margin: 0; padding: 18px; color: #1f2937; background: #fff; font-family: Arial, Helvetica, sans-serif; line-height: 1.38; }}
-    main {{ max-width: 980px; margin: 0 auto; }}
-    h1 {{ margin: 0 0 18px; font-size: 18px; color: #334155; }}
-    p {{ margin: 0 0 12px; font-size: 15px; }}
-    table {{ width: 100%; margin: 12px 0; border-collapse: collapse; table-layout: fixed; }}
-    td {{ border: 1px solid #d7dee8; padding: 8px; vertical-align: top; overflow-wrap: anywhere; }}
-    img {{ display: block; max-width: 100%; height: auto; margin: 14px auto; border: 1px solid #e5e7eb; }}
-    .embedded-text {{ color: #475569; font-style: italic; text-align: center; }}
-  </style>
-</head>
-<body>
-  <main>
-    <h1>DOCX original</h1>
-    {"".join(body_parts)}
-  </main>
-</body>
-</html>"""
+    if result.returncode != 0:
+        return None
 
+    if expected_pdf.exists():
+        return expected_pdf
 
-def _render_source_figure(job_id: str, figure) -> str:
-    source = f"/api/jobs/{job_id}/{quote(figure.output_filename)}"
-    alt = escape(figure.caption or figure.output_filename)
-    caption = f'<p class="embedded-text">{escape(figure.caption)}</p>' if figure.caption else ""
-    return f'<img src="{source}" alt="{alt}">{caption}'
-
-
-def _render_source_table(block: TableBlock) -> str:
-    rows = []
-    for row in block.rows:
-        cells = "".join(f"<td>{escape(cell)}</td>" for cell in row)
-        rows.append(f"<tr>{cells}</tr>")
-    return "<table><tbody>" + "".join(rows) + "</tbody></table>"
-
-
-def _table_text(block: TableBlock) -> str:
-    return " ".join(cell for row in block.rows for cell in row if cell).strip()
+    pdf_files = sorted(preview_dir.glob("*.pdf"), key=lambda path: path.stat().st_mtime, reverse=True)
+    return pdf_files[0] if pdf_files else None

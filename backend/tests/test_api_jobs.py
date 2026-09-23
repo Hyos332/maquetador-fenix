@@ -43,6 +43,9 @@ def test_api_creates_job_and_exposes_outputs(tmp_path, monkeypatch) -> None:
     assert payload["delivery_dir_path"]
 
     assert client.get(payload["html_url"]).status_code == 200
+    source_preview_response = client.get(payload["source_preview_url"])
+    assert source_preview_response.status_code == 200
+    assert "application/pdf" in source_preview_response.headers["content-type"]
     assert client.get(payload["epub_url"]).status_code == 200
     delivery_response = client.get(payload["delivery_url"])
     assert delivery_response.status_code == 200

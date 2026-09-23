@@ -138,12 +138,12 @@ class TableImageExtractor:
             return
 
         padding_x = 90
-        padding_y = 12
+        padding_bottom = 12
         clip = {
             "x": max(box["x"] - padding_x, 0),
-            "y": max(box["y"] - padding_y, 0),
+            "y": box["y"],
             "width": box["width"] + padding_x * 2,
-            "height": box["height"] + padding_y * 2,
+            "height": box["height"] + padding_bottom,
         }
         page.screenshot(path=str(output_path), clip=clip)
 
