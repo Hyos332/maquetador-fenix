@@ -7,7 +7,7 @@ from zipfile import ZipFile
 
 from lxml import etree
 
-from app.utils.strings import normalize_whitespace
+from app.utils.strings import clean_word_text
 
 WORD_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 REL_NS = "http://schemas.openxmlformats.org/package/2006/relationships"
@@ -178,7 +178,7 @@ class DocxParser:
         return None
 
     def _parse_paragraph(self, paragraph: etree._Element, index: int) -> ParagraphBlock | None:
-        text = normalize_whitespace("".join(paragraph.xpath(".//w:t/text()", namespaces=NS)))
+        text = self._paragraph_text(paragraph)
         image_ids = tuple(paragraph.xpath(".//a:blip/@r:embed", namespaces=NS))
         chart_ids = tuple(paragraph.xpath(".//c:chart/@r:id", namespaces=NS))
 
@@ -198,10 +198,7 @@ class DocxParser:
         for row in table.xpath("./w:tr", namespaces=NS):
             cells: list[str] = []
             for cell in row.xpath("./w:tc", namespaces=NS):
-                paragraphs = [
-                    normalize_whitespace("".join(p.xpath(".//w:t/text()", namespaces=NS)))
-                    for p in cell.xpath("./w:p", namespaces=NS)
-                ]
+                paragraphs = [self._paragraph_text(p) for p in cell.xpath("./w:p", namespaces=NS)]
                 cells.append(" | ".join(text for text in paragraphs if text))
             rows.append(tuple(cells))
 
@@ -216,3 +213,10 @@ class DocxParser:
             image_relationship_ids=image_ids,
             chart_relationship_ids=chart_ids,
         )
+
+    def _paragraph_text(self, paragraph: etree._Element) -> str:
+        parts: list[str] = []
+        for element in paragraph.xpath(".//w:t | .//w:tab | .//w:br | .//w:cr", namespaces=NS):
+            tag = etree.QName(element).localname
+            parts.append(element.text or "" if tag == "t" else " ")
+        return clean_word_text("".join(parts))

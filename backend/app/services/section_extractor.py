@@ -4,7 +4,7 @@ from html import escape
 
 from app.models.article import Figure, Section
 from app.services.docx_parser import ParagraphBlock, ParsedDocument, TableBlock
-from app.utils.strings import normalize_for_match
+from app.utils.strings import clean_word_text, normalize_for_match
 
 MAIN_SECTION_TITLES = {
     "introduccion": "Introducción",
@@ -43,11 +43,12 @@ class SectionExtractor:
                     f"<!-- FIGURE:{figure.number} -->"
                     for figure in figures_by_block[block_index]
                 )
-                if isinstance(block, ParagraphBlock):
+                if isinstance(block, ParagraphBlock) or _block_has_media(block):
                     continue
 
             if isinstance(block, ParagraphBlock):
-                normalized = normalize_for_match(block.text.rstrip(":"))
+                text = clean_word_text(block.text)
+                normalized = normalize_for_match(text.rstrip(":"))
                 if normalized in {"referencias", "references"}:
                     break
 
@@ -61,7 +62,7 @@ class SectionExtractor:
                     current_html = []
                     continue
 
-                inline_heading = self._split_inline_heading(block.text)
+                inline_heading = self._split_inline_heading(text)
                 if inline_heading:
                     title, content = inline_heading
                     if current_title:
@@ -70,8 +71,8 @@ class SectionExtractor:
                     current_html = [f"<p>{escape(content)}</p>"] if content else []
                     continue
 
-                if current_title and block.text:
-                    current_html.append(f"<p>{escape(block.text)}</p>")
+                if current_title and text:
+                    current_html.append(f"<p>{escape(text)}</p>")
             elif isinstance(block, TableBlock) and current_title and block.rows:
                 current_html.append(_table_to_html(block))
 
@@ -95,8 +96,13 @@ class SectionExtractor:
 def _table_to_html(block: TableBlock) -> str:
     rows = []
     for row in block.rows:
-        cells = "".join(f"<td>{escape(cell)}</td>" for cell in row)
+        cleaned_cells = [clean_word_text(cell) for cell in row]
+        if not any(cleaned_cells):
+            continue
+        cells = "".join(f"<td>{escape(cell)}</td>" for cell in cleaned_cells)
         rows.append(f"<tr>{cells}</tr>")
+    if not rows:
+        return ""
     return "<table>\n<tbody>\n" + "\n".join(rows) + "\n</tbody>\n</table>"
 
 
@@ -107,3 +113,7 @@ def _figures_by_block_index(figures: list[Figure]) -> dict[int, list[Figure]]:
             continue
         figures_by_block.setdefault(figure.block_index, []).append(figure)
     return figures_by_block
+
+
+def _block_has_media(block) -> bool:
+    return bool(block.image_relationship_ids or block.chart_relationship_ids)

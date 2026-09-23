@@ -13,7 +13,7 @@ from PIL import Image
 from app.models.article import Figure
 from app.services.docx_parser import DocumentBlock, ParagraphBlock, ParsedDocument, TableBlock
 from app.utils.files import ensure_directory
-from app.utils.strings import normalize_for_match
+from app.utils.strings import clean_word_text, normalize_for_match
 
 
 @dataclass(frozen=True)
@@ -43,8 +43,9 @@ class ImageExtractor:
             ) or self._is_journal_header_image_block(block_index, block):
                 continue
 
-            caption_match = self._find_caption(parsed, block_index)
+            caption_match = self._find_caption(parsed, block_index) or self._caption_from_image_block(block)
             caption, caption_block_index = caption_match if caption_match else (None, None)
+            embedded_text = _block_text(block)
 
             for relationship_id in block.image_relationship_ids:
                 if relationship_id in seen_relationship_ids:
@@ -56,7 +57,8 @@ class ImageExtractor:
                     warnings.append(f"Image relationship not found: {relationship_id}")
                     continue
 
-                output_filename = f"Figure_{len(figures) + 1}.PNG"
+                figure_number = len(figures) + 1
+                output_filename = f"Figure_{figure_number}.PNG"
                 if output_dir:
                     try:
                         self._write_png(parsed, relationship.package_path, output_dir / output_filename)
@@ -65,7 +67,7 @@ class ImageExtractor:
 
                 figures.append(
                     Figure(
-                        number=len(figures) + 1,
+                        number=figure_number,
                         source=Path(relationship.package_path),
                         output_filename=output_filename,
                         caption=caption,
@@ -73,6 +75,7 @@ class ImageExtractor:
                         caption_block_index=caption_block_index,
                     )
                 )
+                self._warn_if_complex_image_text(warnings, output_filename, embedded_text, caption)
 
             for relationship_id in block.chart_relationship_ids:
                 if relationship_id in seen_relationship_ids:
@@ -84,7 +87,8 @@ class ImageExtractor:
                     warnings.append(f"Chart relationship not found: {relationship_id}")
                     continue
 
-                output_filename = f"Figure_{len(figures) + 1}.PNG"
+                figure_number = len(figures) + 1
+                output_filename = f"Figure_{figure_number}.PNG"
                 if output_dir:
                     if chart_export_index >= len(chart_exports):
                         warnings.append(f"Could not export chart {relationship.package_path}.")
@@ -94,7 +98,7 @@ class ImageExtractor:
 
                 figures.append(
                     Figure(
-                        number=len(figures) + 1,
+                        number=figure_number,
                         source=Path(relationship.package_path),
                         output_filename=output_filename,
                         caption=caption,
@@ -102,6 +106,7 @@ class ImageExtractor:
                         caption_block_index=caption_block_index,
                     )
                 )
+                self._warn_if_complex_image_text(warnings, output_filename, embedded_text, caption)
 
         return ImageExtractionResult(figures=figures, warnings=warnings)
 
@@ -129,6 +134,37 @@ class ImageExtractor:
                 return candidate.text, candidate_index
 
         return None
+
+    def _caption_from_image_block(self, block: DocumentBlock) -> tuple[str, int | None] | None:
+        text = _block_text(block)
+        if not text or not self._looks_like_caption(text):
+            return None
+        return text, None
+
+    def _looks_like_caption(self, text: str) -> bool:
+        normalized = normalize_for_match(text)
+        return (
+            normalized.startswith("figura ")
+            or normalized.startswith("figure ")
+            or normalized.startswith("tabla ")
+            or normalized.startswith("table ")
+            or normalized.startswith("fig. ")
+        )
+
+    def _warn_if_complex_image_text(
+        self,
+        warnings: list[str],
+        output_filename: str,
+        embedded_text: str,
+        caption: str | None,
+    ) -> None:
+        if not embedded_text or self._looks_like_caption(embedded_text):
+            return
+        if caption and normalize_for_match(embedded_text) == normalize_for_match(caption):
+            return
+        warnings.append(
+            f"{output_filename} is embedded with extra text in the DOCX; review the figure placement/caption."
+        )
 
     def _is_journal_header_image_block(self, block_index: int, block: DocumentBlock) -> bool:
         if block_index > 2:
@@ -228,3 +264,9 @@ class ImageExtractor:
                 images.append(image.convert("RGBA"))
 
             return images
+
+
+def _block_text(block: DocumentBlock) -> str:
+    if isinstance(block, ParagraphBlock):
+        return clean_word_text(block.text)
+    return clean_word_text(" ".join(cell for row in block.rows for cell in row if cell))

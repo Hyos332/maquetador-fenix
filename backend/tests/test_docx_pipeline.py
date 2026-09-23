@@ -5,6 +5,7 @@ from zipfile import ZipFile
 import pytest
 
 from app.config.settings import Settings
+from app.models.article import Figure
 from app.pipeline.article_pipeline import ArticlePipeline
 from app.services.docx_parser import DocxParser, ImageRelationship, ParagraphBlock, ParsedDocument, TableBlock
 from app.services.image_extractor import ImageExtractor
@@ -48,8 +49,8 @@ def test_docx_parser_preserves_body_order_and_sdt_references(parsed_alberto) -> 
         if isinstance(block, ParagraphBlock) and block.text.startswith("[")
     ]
     assert len(reference_blocks) == 175
-    assert reference_blocks[0].text.startswith("[1]Boutari")
-    assert reference_blocks[-1].text.startswith("[175]Carrello")
+    assert reference_blocks[0].text.startswith("[1] Boutari")
+    assert reference_blocks[-1].text.startswith("[175] Carrello")
 
 
 def test_metadata_references_sections_and_images_from_alberto(parsed_alberto, tmp_path: Path) -> None:
@@ -126,6 +127,73 @@ def test_image_extractor_keeps_real_table_images_without_caption_and_skips_heade
     assert [figure.output_filename for figure in result.figures] == ["Figure_1.PNG"]
     assert result.figures[0].caption is None
     assert (tmp_path / "figures" / "Figure_1.PNG").exists()
+
+
+def test_image_extractor_uses_caption_inside_image_table(tmp_path: Path) -> None:
+    docx_path = tmp_path / "article.docx"
+    tiny_png = (
+        b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01"
+        b"\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\rIDATx\x9cc\xf8\xff"
+        b"\xff?\x00\x05\xfe\x02\xfeA\xe2!\xbc\x00\x00\x00\x00IEND\xaeB`\x82"
+    )
+    with ZipFile(docx_path, "w") as archive:
+        archive.writestr("word/media/figure.png", tiny_png)
+
+    parsed = ParsedDocument(
+        path=docx_path,
+        blocks=(
+            ParagraphBlock(index=1, text="Introduction"),
+            TableBlock(
+                index=2,
+                rows=(("Figure 1. Study flow diagram",),),
+                image_relationship_ids=("rFigure",),
+            ),
+        ),
+        image_relationships={
+            "rFigure": ImageRelationship("rFigure", "media/figure.png", "word/media/figure.png"),
+        },
+        chart_relationships={},
+    )
+
+    result = ImageExtractor().extract_figures(parsed, output_dir=tmp_path / "figures")
+
+    assert result.warnings == []
+    assert result.figures[0].caption == "Figure 1. Study flow diagram"
+
+
+def test_section_extractor_skips_word_table_markup_around_figures() -> None:
+    parsed = ParsedDocument(
+        path=Path("article.docx"),
+        blocks=(
+            ParagraphBlock(index=1, text="Introduction"),
+            ParagraphBlock(index=2, text="Before figure."),
+            TableBlock(
+                index=3,
+                rows=(("Figure 1. Study flow diagram",),),
+                image_relationship_ids=("rFigure",),
+            ),
+            ParagraphBlock(index=4, text="After figure."),
+        ),
+        image_relationships={},
+        chart_relationships={},
+    )
+    sections = SectionExtractor().extract(
+        parsed,
+        figures=[
+            Figure(
+                number=1,
+                source=Path("word/media/figure.png"),
+                output_filename="Figure_1.PNG",
+                caption="Figure 1. Study flow diagram",
+                block_index=2,
+            )
+        ],
+    )
+
+    assert "<!-- FIGURE:1 -->" in sections[0].html_content
+    assert "<table>" not in sections[0].html_content
+    assert "Before figure." in sections[0].html_content
+    assert "After figure." in sections[0].html_content
 
 
 def test_article_pipeline_dry_run_uses_same_services(tmp_path: Path) -> None:
