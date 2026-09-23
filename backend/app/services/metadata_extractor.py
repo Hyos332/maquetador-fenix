@@ -121,11 +121,7 @@ class MetadataExtractor:
         first_title = paragraphs[title_start].text
         second_title = paragraphs[title_start + 1].text
         author_paragraphs = paragraphs[title_start + 2 : manuscript_index]
-        authors = [
-            self._build_author(author_paragraphs[index].text, author_paragraphs[index + 1].text)
-            for index in range(0, len(author_paragraphs) - 1, 2)
-            if author_paragraphs[index].text and author_paragraphs[index + 1].text
-        ]
+        authors = self._extract_header_authors(author_paragraphs)
         if not authors:
             return None
 
@@ -153,6 +149,27 @@ class MetadataExtractor:
             pages=pages,
             **dates,
         )
+
+    def _extract_header_authors(self, author_paragraphs: list[ParagraphBlock]) -> list[Author]:
+        authors: list[Author] = []
+        index = 0
+        while index < len(author_paragraphs):
+            full_name = author_paragraphs[index].text
+            index += 1
+            detail_parts: list[str] = []
+
+            while index < len(author_paragraphs):
+                current = author_paragraphs[index].text
+                next_text = author_paragraphs[index + 1].text if index + 1 < len(author_paragraphs) else ""
+                if detail_parts and _looks_like_author_name(current) and _looks_like_author_detail(next_text):
+                    break
+                detail_parts.append(current)
+                index += 1
+
+            if full_name and detail_parts:
+                authors.append(self._build_author(full_name, " ".join(detail_parts)))
+
+        return authors
 
     def _find_header_citation_index(self, paragraphs: list[ParagraphBlock]) -> int | None:
         for index, paragraph in enumerate(paragraphs[:3]):
@@ -282,6 +299,28 @@ def _parse_institution_country(details: str) -> tuple[str | None, str | None]:
             country = country or possible_country
 
     return institution, country
+
+
+def _looks_like_author_name(value: str) -> bool:
+    normalized = normalize_for_match(value)
+    if not normalized or "@" in normalized or "orcid" in normalized or "," in normalized:
+        return False
+    if any(term in normalized for term in ("universidad", "university", "instituto", "institute")):
+        return False
+    return 2 <= len(normalized.split()) <= 6
+
+
+def _looks_like_author_detail(value: str) -> bool:
+    normalized = normalize_for_match(value)
+    return (
+        "@" in normalized
+        or "orcid" in normalized
+        or "," in normalized
+        or "universidad" in normalized
+        or "university" in normalized
+        or "instituto" in normalized
+        or "institute" in normalized
+    )
 
 
 def _assign_titles(

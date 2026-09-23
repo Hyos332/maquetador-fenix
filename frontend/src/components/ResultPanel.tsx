@@ -30,6 +30,7 @@ export function ResultPanel({ job, onReviewStarted }: ResultPanelProps) {
   }
 
   const htmlUrl = job.html_url ? resolveApiUrl(job.html_url) : null;
+  const sourcePreviewUrl = job.source_preview_url ? resolveApiUrl(job.source_preview_url) : null;
   const deliveryArchiveUrl = job.delivery_archive_url ? resolveApiUrl(job.delivery_archive_url) : null;
   const jobId = job.job_id;
   const abstractReview = getAbstractReviewState(job, abstractEs, abstractEn);
@@ -149,7 +150,23 @@ export function ResultPanel({ job, onReviewStarted }: ResultPanelProps) {
         ) : null}
       </div>
 
-      {htmlUrl ? <iframe className="preview" title="Vista previa HTML" src={htmlUrl} /> : null}
+      {htmlUrl || sourcePreviewUrl ? (
+        <div className="preview-compare">
+          {htmlUrl ? (
+            <section className="preview-pane">
+              <h3>HTML generado</h3>
+              <iframe className="preview" title="Vista previa HTML generado" src={htmlUrl} />
+            </section>
+          ) : null}
+
+          {sourcePreviewUrl ? (
+            <section className="preview-pane">
+              <h3>DOCX original</h3>
+              <iframe className="preview" title="Vista previa DOCX original" src={sourcePreviewUrl} />
+            </section>
+          ) : null}
+        </div>
+      ) : null}
     </section>
   );
 }

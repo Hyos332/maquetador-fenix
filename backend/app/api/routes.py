@@ -15,6 +15,7 @@ from pydantic import BaseModel, ConfigDict
 from app.config.settings import Settings, settings as app_settings
 from app.models.pipeline import PipelineResult, PipelineStatus
 from app.pipeline.article_pipeline import ArticlePipeline
+from app.services.docx_parser import DocxParser, ParagraphBlock, TableBlock
 from app.utils.files import ensure_directory, sanitize_filename
 from app.utils.strings import word_count
 
@@ -58,6 +59,7 @@ class JobStatusResponse(BaseModel):
     abstract_en_word_count: int | None = None
     abstract_word_limit: int = 250
     html_url: str | None = None
+    source_preview_url: str | None = None
     epub_url: str | None = None
     delivery_dir_path: str | None = None
     delivery_url: str | None = None
@@ -138,6 +140,20 @@ def get_job_html(job_id: str) -> FileResponse:
     if not record.result or not record.result.html_path:
         raise HTTPException(status_code=404, detail="HTML no disponible.")
     return FileResponse(record.result.html_path, media_type="text/html")
+
+
+@router.get("/jobs/{job_id}/source-preview")
+def get_job_source_preview(job_id: str) -> HTMLResponse:
+    record = _get_record(job_id)
+    if not record.result or not record.result.article:
+        raise HTTPException(status_code=404, detail="Vista DOCX no disponible.")
+
+    source_docx = _source_docx_for_preview(record)
+    if not source_docx:
+        raise HTTPException(status_code=404, detail="DOCX original no disponible.")
+
+    parsed = DocxParser().parse(source_docx)
+    return HTMLResponse(_render_docx_preview(record.job_id, parsed, record.result))
 
 
 @router.get("/jobs/{job_id}/epub")
@@ -250,6 +266,11 @@ def _get_record(job_id: str) -> JobRecord:
 def _to_status_response(record: JobRecord) -> JobStatusResponse:
     article = record.result.article if record.result else None
     html_url = f"/api/jobs/{record.job_id}/html" if record.result and record.result.html_path else None
+    source_preview_url = (
+        f"/api/jobs/{record.job_id}/source-preview"
+        if record.result and record.result.article and _source_docx_for_preview(record)
+        else None
+    )
     epub_url = f"/api/jobs/{record.job_id}/epub" if record.result and record.result.epub_path else None
     delivery_url = f"/api/jobs/{record.job_id}/delivery" if record.result and record.result.delivery_dir else None
     delivery_archive_url = (
@@ -273,6 +294,7 @@ def _to_status_response(record: JobRecord) -> JobStatusResponse:
         abstract_es_word_count=word_count(article.abstract_es) if article else None,
         abstract_en_word_count=word_count(article.abstract_en) if article else None,
         html_url=html_url,
+        source_preview_url=source_preview_url,
         epub_url=epub_url,
         delivery_dir_path=_delivery_dir_path(record.result),
         delivery_url=delivery_url,
@@ -354,3 +376,85 @@ def _format_size(size: int) -> str:
     if size < 1024 * 1024:
         return f"{size / 1024:.0f} KB"
     return f"{size / (1024 * 1024):.1f} MB"
+
+
+def _source_docx_for_preview(record: JobRecord) -> Path | None:
+    if record.source_zip.suffix.lower() == ".docx" and record.source_zip.exists():
+        return record.source_zip
+
+    if record.result and record.result.delivery_dir:
+        docx_files = sorted(record.result.delivery_dir.glob("*.docx"))
+        if docx_files:
+            return docx_files[0]
+
+    return None
+
+
+def _render_docx_preview(job_id: str, parsed, result: PipelineResult) -> str:
+    article = result.article
+    figures_by_block: dict[int, list] = {}
+    if article:
+        for figure in article.figures:
+            if figure.block_index is not None:
+                figures_by_block.setdefault(figure.block_index, []).append(figure)
+
+    body_parts: list[str] = []
+    for block_index, block in enumerate(parsed.blocks):
+        if block_index in figures_by_block:
+            body_parts.extend(_render_source_figure(job_id, figure) for figure in figures_by_block[block_index])
+
+        if isinstance(block, ParagraphBlock):
+            if block.text:
+                body_parts.append(f"<p>{escape(block.text)}</p>")
+        elif isinstance(block, TableBlock):
+            if block.image_relationship_ids or block.chart_relationship_ids:
+                table_text = _table_text(block)
+                if table_text:
+                    body_parts.append(f'<p class="embedded-text">{escape(table_text)}</p>')
+                continue
+            body_parts.append(_render_source_table(block))
+
+    title = escape(article.primary_title if article else parsed.path.stem)
+    return f"""<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DOCX original - {title}</title>
+  <style>
+    body {{ margin: 0; padding: 18px; color: #1f2937; background: #fff; font-family: Arial, Helvetica, sans-serif; line-height: 1.38; }}
+    main {{ max-width: 980px; margin: 0 auto; }}
+    h1 {{ margin: 0 0 18px; font-size: 18px; color: #334155; }}
+    p {{ margin: 0 0 12px; font-size: 15px; }}
+    table {{ width: 100%; margin: 12px 0; border-collapse: collapse; table-layout: fixed; }}
+    td {{ border: 1px solid #d7dee8; padding: 8px; vertical-align: top; overflow-wrap: anywhere; }}
+    img {{ display: block; max-width: 100%; height: auto; margin: 14px auto; border: 1px solid #e5e7eb; }}
+    .embedded-text {{ color: #475569; font-style: italic; text-align: center; }}
+  </style>
+</head>
+<body>
+  <main>
+    <h1>DOCX original</h1>
+    {"".join(body_parts)}
+  </main>
+</body>
+</html>"""
+
+
+def _render_source_figure(job_id: str, figure) -> str:
+    source = f"/api/jobs/{job_id}/{quote(figure.output_filename)}"
+    alt = escape(figure.caption or figure.output_filename)
+    caption = f'<p class="embedded-text">{escape(figure.caption)}</p>' if figure.caption else ""
+    return f'<img src="{source}" alt="{alt}">{caption}'
+
+
+def _render_source_table(block: TableBlock) -> str:
+    rows = []
+    for row in block.rows:
+        cells = "".join(f"<td>{escape(cell)}</td>" for cell in row)
+        rows.append(f"<tr>{cells}</tr>")
+    return "<table><tbody>" + "".join(rows) + "</tbody></table>"
+
+
+def _table_text(block: TableBlock) -> str:
+    return " ".join(cell for row in block.rows for cell in row if cell).strip()
