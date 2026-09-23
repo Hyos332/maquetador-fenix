@@ -299,3 +299,23 @@ def test_table_image_extractor_captures_body_tables_only() -> None:
     assert len(result.tables) == 1
     assert result.tables[0].output_filename == "Table_1.PNG"
     assert result.tables[0].block_index == 3
+
+
+def test_table_image_extractor_captures_single_cell_figure_tables() -> None:
+    parsed = ParsedDocument(
+        path=Path("article.docx"),
+        blocks=(
+            ParagraphBlock(index=1, text="Resultados"),
+            ParagraphBlock(index=2, text="Figura 4"),
+            ParagraphBlock(index=3, text="Signos de puntuación"),
+            TableBlock(index=4, rows=(("E. 15. Texto de ejemplo con puntuación.",),)),
+        ),
+        image_relationships={},
+        chart_relationships={},
+    )
+
+    result = TableImageExtractor().extract_tables(parsed)
+
+    assert len(result.tables) == 1
+    assert result.tables[0].output_filename == "Table_1.PNG"
+    assert result.tables[0].block_index == 3

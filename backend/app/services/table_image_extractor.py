@@ -10,7 +10,7 @@ from playwright.sync_api import Error as PlaywrightError
 from playwright.sync_api import sync_playwright
 
 from app.models.article import ArticleTable
-from app.services.docx_parser import ParsedDocument, TableBlock
+from app.services.docx_parser import ParagraphBlock, ParsedDocument, TableBlock
 from app.services.section_extractor import MAIN_SECTION_TITLES
 from app.utils.files import ensure_directory
 from app.utils.strings import clean_word_text, normalize_for_match
@@ -55,7 +55,11 @@ class TableImageExtractor:
             if not inside_article_body:
                 continue
 
-            if not isinstance(block, TableBlock) or not _should_capture_table(block):
+            if not isinstance(block, TableBlock):
+                continue
+
+            force_capture = _follows_figure_or_table_caption(parsed, block_index)
+            if not _should_capture_table(block, force_capture=force_capture):
                 continue
 
             table_number = len(candidates) + 1
@@ -182,7 +186,7 @@ class TableImageExtractor:
         return None
 
 
-def _should_capture_table(block: TableBlock) -> bool:
+def _should_capture_table(block: TableBlock, force_capture: bool = False) -> bool:
     if block.image_relationship_ids or block.chart_relationship_ids:
         return False
 
@@ -190,8 +194,22 @@ def _should_capture_table(block: TableBlock) -> bool:
     if not nonempty_cells:
         return False
 
+    if force_capture:
+        return True
+
     max_columns = max((len(row) for row in block.rows), default=0)
     return max_columns > 1 and len(nonempty_cells) >= 2
+
+
+def _follows_figure_or_table_caption(parsed: ParsedDocument, block_index: int) -> bool:
+    for previous_index in range(max(0, block_index - 3), block_index):
+        block = parsed.blocks[previous_index]
+        if not isinstance(block, ParagraphBlock):
+            continue
+        normalized = normalize_for_match(clean_word_text(block.text).rstrip(":"))
+        if normalized.startswith(("figura ", "figure ", "tabla ", "table ")):
+            return True
+    return False
 
 
 def _table_to_html(block: TableBlock) -> str:
