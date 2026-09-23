@@ -189,6 +189,59 @@ def test_section_extractor_preserves_group_caption_before_figure_grid() -> None:
 
     section = SectionExtractor().extract(parsed, figures=figures)[0]
 
+    assert '<p class="figure-caption"><i>Figura 2</i></p>' in section.html_content
+    assert '<p class="figure-subtitle"><i>Subtítulo de la figura compuesta</i></p>' in section.html_content
     assert section.html_content.index("Figura 2") < section.html_content.index("<!-- FIGURE:1 -->")
     assert section.html_content.index("Subtítulo") < section.html_content.index("<!-- FIGURE:1 -->")
     assert section.html_content.index("<!-- FIGURE:2 -->") < section.html_content.index("Nota: elaboración")
+
+
+def test_section_extractor_preserves_text_rows_around_media_table() -> None:
+    parsed = ParsedDocument(
+        path=Path("article.docx"),
+        blocks=(
+            ParagraphBlock(index=1, text="Resultados"),
+            ParagraphBlock(index=2, text="Figura 2"),
+            TableBlock(
+                index=3,
+                rows=(
+                    ("Aumento de la sensibilidad a las condiciones iniciales", ""),
+                    ("Condición A", "Condición B"),
+                    ("Nota: elaboración propia.", ""),
+                ),
+                image_relationship_ids=("rFigureA", "rFigureB"),
+                image_cell_positions=((1, 0), (1, 1)),
+            ),
+        ),
+        image_relationships={},
+        chart_relationships={},
+    )
+    figures = [
+        Figure(
+            number=1,
+            source=Path("word/media/a.png"),
+            output_filename="Figure_1.PNG",
+            caption="Figura 2. Condición A",
+            block_index=2,
+            caption_block_index=1,
+            group_id="figure-table-2",
+            group_row=0,
+            group_col=0,
+        ),
+        Figure(
+            number=2,
+            source=Path("word/media/b.png"),
+            output_filename="Figure_2.PNG",
+            caption="Figura 2. Condición B",
+            block_index=2,
+            caption_block_index=1,
+            group_id="figure-table-2",
+            group_row=0,
+            group_col=1,
+        ),
+    ]
+
+    section = SectionExtractor().extract(parsed, figures=figures)[0]
+
+    assert section.html_content.index("Aumento de la sensibilidad") < section.html_content.index("<!-- FIGURE:1 -->")
+    assert section.html_content.index("<!-- FIGURE:2 -->") < section.html_content.index("Nota: elaboración propia.")

@@ -202,6 +202,46 @@ def test_image_extractor_uses_table_cell_text_for_multi_image_table(tmp_path: Pa
     assert [(figure.group_row, figure.group_col) for figure in result.figures] == [(0, 0), (0, 1)]
 
 
+def test_image_extractor_uses_only_cells_that_contain_table_images(tmp_path: Path) -> None:
+    docx_path = tmp_path / "article.docx"
+    tiny_png = (
+        b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01"
+        b"\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\nIDATx\x9cc\x00\x01"
+        b"\x00\x00\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82"
+    )
+    with ZipFile(docx_path, "w") as archive:
+        archive.writestr("word/media/figure-a.png", tiny_png)
+        archive.writestr("word/media/figure-b.png", tiny_png)
+
+    parsed = ParsedDocument(
+        path=docx_path,
+        blocks=(
+            ParagraphBlock(index=1, text="Figura 2"),
+            TableBlock(
+                index=2,
+                rows=(
+                    ("Aumento de la sensibilidad a las condiciones iniciales", ""),
+                    ("Condición A", "Condición B"),
+                ),
+                image_relationship_ids=("rFigureA", "rFigureB"),
+                image_cell_positions=((1, 0), (1, 1)),
+            ),
+        ),
+        image_relationships={
+            "rFigureA": ImageRelationship("rFigureA", "media/figure-a.png", "word/media/figure-a.png"),
+            "rFigureB": ImageRelationship("rFigureB", "media/figure-b.png", "word/media/figure-b.png"),
+        },
+        chart_relationships={},
+    )
+
+    result = ImageExtractor().extract_figures(parsed, output_dir=tmp_path / "figures")
+
+    assert [figure.caption for figure in result.figures] == [
+        "Figura 2. Condición A",
+        "Figura 2. Condición B",
+    ]
+
+
 def test_image_extractor_prefers_previous_caption_for_image_between_captions(tmp_path: Path) -> None:
     docx_path = tmp_path / "article.docx"
     tiny_png = (

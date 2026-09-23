@@ -44,16 +44,16 @@ docker compose restart
 docker compose down
 ```
 
-La revisión IA local queda activa en Docker. El mismo comando levanta el maquetador, el contenedor `ollama` y descarga el modelo configurado en `MLS_AI_REVIEW_MODEL` dentro del volumen Docker `ollama-data`.
+La revisión IA local queda apagada por defecto. El contenedor no levanta Ollama ni descarga modelos, para mantener el maquetador liviano y rápido.
 
-Por defecto usa un modelo liviano:
+La revisión principal se hace con reglas deterministas del parser/HTML:
 
 ```yaml
-MLS_AI_REVIEW_ENABLED: "true"
+MLS_AI_REVIEW_ENABLED: "false"
 MLS_AI_REVIEW_MODEL: "qwen2.5:0.5b"
 ```
 
-La primera vez puede tardar porque descarga el motor y el modelo; después queda guardado y arranca más rápido.
+El código de IA queda como opción avanzada, pero no se usa en el flujo normal.
 
 Por defecto el contenedor arranca con:
 
