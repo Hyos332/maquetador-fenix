@@ -29,4 +29,5 @@ def test_mls_page_replaces_table_placeholders_before_pasting() -> None:
 
     assert "Figure_2.PNG" in replaced
     assert "Table_6.PNG" in replaced
+    assert 'style="max-width: 700px; max-height: 600px;"' in replaced
     assert "<!-- TABLE:6 -->" not in replaced

@@ -272,7 +272,7 @@ def _replace_media_placeholders(html_content: str) -> str:
         filename = f"Figure_{number}.PNG"
         return (
             f'<p class="figure"><img src="{filename}" alt="Figure {number}" '
-            'style="max-width:700px; max-height:600px; width:auto; height:auto;"></p>'
+            'style="max-width: 700px; max-height: 600px;"></p>'
         )
 
     def replace_table(match: re.Match[str]) -> str:
@@ -280,7 +280,7 @@ def _replace_media_placeholders(html_content: str) -> str:
         filename = f"Table_{number}.PNG"
         return (
             f'<p class="figure table-image"><img src="{filename}" alt="Table {number}" '
-            'style="max-width:700px; max-height:600px; width:auto; height:auto;"></p>'
+            'style="max-width: 700px; max-height: 600px;"></p>'
         )
 
     html_content = FIGURE_PLACEHOLDER_PATTERN.sub(replace, html_content)

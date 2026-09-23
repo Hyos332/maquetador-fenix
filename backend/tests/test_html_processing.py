@@ -2,7 +2,7 @@ from pathlib import Path
 
 from lxml import html
 
-from app.models.article import Article, Author, Figure, Section
+from app.models.article import Article, ArticleTable, Author, Figure, Section
 from app.services.docx_parser import ParagraphBlock, ParsedDocument, TableBlock
 from app.models.pipeline import PipelineStatus
 from app.services.html_renderer import IntermediateHtmlRenderer
@@ -142,7 +142,38 @@ def test_renderer_keeps_multi_image_table_as_figure_grid() -> None:
     assert len(root.xpath("//table[contains(concat(' ', normalize-space(@class), ' '), ' figure-grid ')]")) == 1
     assert len(root.xpath("//table[contains(concat(' ', normalize-space(@class), ' '), ' figure-grid ')]//img")) == 4
     assert rendered.count('class="figure-grid"') == 1
+    assert 'style="max-width: 700px; max-height: 600px;"' in rendered
     assert "Condición A" in rendered
+
+
+def test_renderer_keeps_table_captures_centered_at_mls_image_size() -> None:
+    journal = JournalConfigService().load("mlser")
+    article = Article(
+        journal="mlser",
+        title_es="Artículo con tabla capturada",
+        authors=[Author(full_name="Ana Test")],
+        sections=[
+            Section(
+                title="Resultados",
+                html_content="<p>Antes</p>\n<!-- TABLE:1 -->\n<p>Después</p>",
+            )
+        ],
+        tables=[
+            ArticleTable(
+                number=1,
+                html_content="<table></table>",
+                output_filename="Table_1.PNG",
+                block_index=10,
+            )
+        ],
+    )
+
+    rendered = IntermediateHtmlRenderer().render(article, journal)
+    root = html.fromstring(rendered)
+
+    image = root.xpath("//div[contains(concat(' ', normalize-space(@class), ' '), ' table-image ')]//img")[0]
+    assert image.get("src") == "Table_1.PNG"
+    assert image.get("style") == "max-width: 700px; max-height: 600px;"
 
 
 def test_section_extractor_preserves_group_caption_before_figure_grid() -> None:

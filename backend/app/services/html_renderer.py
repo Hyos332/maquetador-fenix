@@ -186,7 +186,7 @@ class IntermediateHtmlRenderer:
                     '<td style="border: 1px solid #9ca3af; padding: 6px; text-align: center; vertical-align: top;">'
                     f"{caption_html}"
                     f'<img src="{escape(figure.output_filename)}" alt="{alt}" '
-                    'style="max-width: 100%; height: auto;">'
+                    'style="max-width: 700px; max-height: 600px;">'
                     "</td>"
                 )
             table_rows.append("<tr>" + "".join(cells) + "</tr>")
@@ -234,7 +234,7 @@ class IntermediateHtmlRenderer:
             return (
                 '<div class="center-text table-image">'
                 f'<img src="{escape(table.output_filename)}" alt="{alt}" '
-                'style="max-width: 100%; height: auto;">'
+                'style="max-width: 700px; max-height: 600px;">'
                 "</div>"
             )
 
