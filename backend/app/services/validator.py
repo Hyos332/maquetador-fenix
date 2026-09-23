@@ -90,17 +90,14 @@ class Validator:
             source = Path(image.get("src", "")).name
             lowered_source = source.lower()
             if lowered_source.startswith("table_"):
+                if image.get("style") != journal.image_style.html_style:
+                    errors.append(f"Table image does not have required style: {source}")
                 if assets_dir and not (assets_dir / source).exists():
                     errors.append(f"Table image referenced by HTML does not exist: {source}")
                 continue
             if not lowered_source.startswith("figure_"):
                 continue
-            expected_style = (
-                "max-width: 100%; height: auto;"
-                if _has_ancestor_class(image, "figure-grid")
-                else journal.image_style.html_style
-            )
-            if image.get("style") != expected_style:
+            if image.get("style") != journal.image_style.html_style:
                 errors.append(f"Figure image does not have required style: {source}")
             if assets_dir and not (assets_dir / source).exists():
                 errors.append(f"Figure file referenced by HTML does not exist: {source}")
@@ -200,10 +197,3 @@ def _normalize(value: str | None) -> str:
         return ""
     return " ".join(value.casefold().split())
 
-
-def _has_ancestor_class(element: html.HtmlElement, class_name: str) -> bool:
-    for ancestor in element.iterancestors():
-        classes = ancestor.get("class", "").split()
-        if class_name in classes:
-            return True
-    return False
