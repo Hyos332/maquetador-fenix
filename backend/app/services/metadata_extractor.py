@@ -11,9 +11,9 @@ from app.utils.strings import normalize_for_match, normalize_whitespace
 DOI_PATTERN = re.compile(r"\b(10\.\d{4,9}/[^\s)]+)", re.IGNORECASE)
 EMAIL_PATTERN = re.compile(r"[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}")
 DATE_PATTERNS = {
-    "received_date": re.compile(r"(?:Recibido|Received)\s*:?\s*(\d{2}/\d{2}/\d{2})", re.I),
-    "reviewed_date": re.compile(r"(?:Revisado|Reviewed)\s*:?\s*(\d{2}/\d{2}/\d{2})", re.I),
-    "accepted_date": re.compile(r"(?:Aceptado|Accepted)\s*:?\s*(\d{2}/\d{2}/\d{2})", re.I),
+    "received_date": re.compile(r"(?:Recibido|Received)\s*:?\s*(\d{2}/\d{2}/\d{2,4})", re.I),
+    "reviewed_date": re.compile(r"(?:Revisado|Reviewed)\s*:?\s*(\d{2}/\d{2}/\d{2,4})", re.I),
+    "accepted_date": re.compile(r"(?:Aceptado|Accepted)\s*:?\s*(\d{2}/\d{2}/\d{2,4})", re.I),
 }
 VOLUME_PATTERN = re.compile(r"\b(?P<volume>\d+)\((?P<issue>\d+)\)\s*[,.;]\s*(?P<pages>\d+\s*-\s*\d+)")
 
@@ -269,9 +269,13 @@ class MetadataExtractor:
 
 
 def _parse_short_date(value: str) -> date:
-    day, month, year = (int(part) for part in value.split("/"))
-    full_year = 2000 + year if year < 70 else 1900 + year
-    return date(full_year, month, day)
+    day, month, year_text = value.split("/")
+    year = int(year_text)
+
+    if len(year_text) == 2:
+        year = 2000 + year if year < 70 else 1900 + year
+
+    return date(year, int(month), int(day))
 
 
 def _split_keywords(value: str) -> list[str]:
