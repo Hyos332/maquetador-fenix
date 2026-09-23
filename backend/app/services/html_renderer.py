@@ -186,8 +186,6 @@ class IntermediateHtmlRenderer:
                 )
             table_rows.append("<tr>" + "".join(cells) + "</tr>")
 
-        group_caption = _group_caption(sorted_figures)
-        group_caption_html = f"<p><i>{escape(group_caption)}</i></p>" if group_caption else ""
         return (
             '<div class="center-text">'
             '<table class="figure-grid" '
@@ -195,7 +193,6 @@ class IntermediateHtmlRenderer:
             "<tbody>"
             + "".join(table_rows)
             + "</tbody></table>"
-            + group_caption_html
             + "</div>"
         )
 

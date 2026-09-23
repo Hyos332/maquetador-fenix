@@ -36,13 +36,24 @@ class SectionExtractor:
             for figure in figures or []
             if figure.caption_block_index is not None
         }
+        grouped_caption_block_indexes = {
+            figure.caption_block_index
+            for figure in figures or []
+            if figure.group_id and figure.caption_block_index is not None
+        }
+        figure_subtitle_block_indexes = _figure_subtitle_block_indexes(parsed, figures or [])
 
         for block_index, block in enumerate(parsed.blocks):
             if current_title and block_index in figures_by_block:
+                if isinstance(block, TableBlock):
+                    before_table_text, after_table_text = _media_table_text(block)
+                    current_html.extend(before_table_text)
                 current_html.extend(
                     f"<!-- FIGURE:{figure.number} -->"
                     for figure in figures_by_block[block_index]
                 )
+                if isinstance(block, TableBlock):
+                    current_html.extend(after_table_text)
                 if isinstance(block, ParagraphBlock) or _block_has_media(block):
                     continue
 
@@ -52,7 +63,7 @@ class SectionExtractor:
                 if normalized in {"referencias", "references"}:
                     break
 
-                if block_index in caption_block_indexes:
+                if block_index in caption_block_indexes and block_index not in grouped_caption_block_indexes:
                     continue
 
                 if normalized in MAIN_SECTION_TITLES:
@@ -72,7 +83,12 @@ class SectionExtractor:
                     continue
 
                 if current_title and text:
-                    current_html.append(f"<p>{escape(text)}</p>")
+                    if block_index in grouped_caption_block_indexes:
+                        current_html.append(f'<p class="figure-caption"><i>{escape(text)}</i></p>')
+                    elif block_index in figure_subtitle_block_indexes:
+                        current_html.append(f'<p class="figure-subtitle"><i>{escape(text)}</i></p>')
+                    else:
+                        current_html.append(f"<p>{escape(text)}</p>")
             elif isinstance(block, TableBlock) and current_title and block.rows:
                 current_html.append(_table_to_html(block))
 
@@ -117,3 +133,71 @@ def _figures_by_block_index(figures: list[Figure]) -> dict[int, list[Figure]]:
 
 def _block_has_media(block) -> bool:
     return bool(block.image_relationship_ids or block.chart_relationship_ids)
+
+
+def _figure_subtitle_block_indexes(parsed: ParsedDocument, figures: list[Figure]) -> set[int]:
+    indexes: set[int] = set()
+    for figure in figures:
+        caption_index = figure.caption_block_index
+        figure_index = figure.block_index
+        if caption_index is None or figure_index is None:
+            continue
+        if figure_index <= caption_index + 1:
+            continue
+
+        for block_index in range(caption_index + 1, figure_index):
+            block = parsed.blocks[block_index]
+            if not isinstance(block, ParagraphBlock):
+                continue
+            text = clean_word_text(block.text)
+            if not text or _looks_like_caption_or_note(text):
+                continue
+            indexes.add(block_index)
+    return indexes
+
+
+def _looks_like_caption_or_note(text: str) -> bool:
+    normalized = normalize_for_match(text.rstrip(":"))
+    return normalized.startswith(
+        (
+            "figura ",
+            "figure ",
+            "tabla ",
+            "table ",
+            "fig. ",
+            "nota",
+            "note",
+        )
+    )
+
+
+def _media_table_text(block: TableBlock) -> tuple[list[str], list[str]]:
+    if not block.image_cell_positions and not block.chart_relationship_ids:
+        return [], []
+
+    media_rows = {row for row, _ in block.image_cell_positions}
+    if not media_rows:
+        return [], []
+
+    first_media_row = min(media_rows)
+    last_media_row = max(media_rows)
+    before: list[str] = []
+    after: list[str] = []
+
+    for row_index, row in enumerate(block.rows):
+        if row_index in media_rows:
+            continue
+
+        text = clean_word_text(" ".join(cell for cell in row if clean_word_text(cell)))
+        if not text:
+            continue
+
+        html_text = f'<p class="figure-subtitle"><i>{escape(text)}</i></p>'
+        if row_index < first_media_row:
+            before.append(html_text)
+        elif row_index > last_media_row:
+            after.append(html_text)
+        else:
+            after.append(html_text)
+
+    return before, after

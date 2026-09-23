@@ -19,7 +19,7 @@ def test_ai_reviewer_disabled_returns_empty_result(tmp_path: Path, monkeypatch) 
     result = LocalAiReviewer(
         enabled=False,
         endpoint="http://localhost:11434/api/generate",
-        model="llama3.2:3b",
+        model="qwen2.5:0.5b",
         timeout_seconds=1,
     ).review(_article(), html_path, [])
 
@@ -56,7 +56,7 @@ def test_ai_reviewer_parses_ollama_json_response(tmp_path: Path, monkeypatch) ->
     result = LocalAiReviewer(
         enabled=True,
         endpoint="http://localhost:11434/api/generate",
-        model="llama3.2:3b",
+        model="qwen2.5:0.5b",
         timeout_seconds=1,
     ).review(_article(), html_path, [])
 
@@ -77,7 +77,7 @@ def test_ai_reviewer_unavailable_model_is_silent(tmp_path: Path, monkeypatch) ->
     result = LocalAiReviewer(
         enabled=True,
         endpoint="http://localhost:11434/api/generate",
-        model="llama3.2:3b",
+        model="qwen2.5:0.5b",
         timeout_seconds=1,
     ).review(_article(), html_path, [])
 
@@ -105,11 +105,29 @@ def test_ai_reviewer_invalid_ollama_response_is_silent(tmp_path: Path, monkeypat
     result = LocalAiReviewer(
         enabled=True,
         endpoint="http://localhost:11434/api/generate",
-        model="llama3.2:3b",
+        model="qwen2.5:0.5b",
         timeout_seconds=1,
     ).review(_article(), html_path, [])
 
     assert result.suggestions == []
+
+
+def test_ai_reviewer_prompt_contains_mls_layout_criteria(tmp_path: Path) -> None:
+    html_path = tmp_path / "article.html"
+    html_path.write_text("<html><body>Figura 2 Nota</body></html>", encoding="utf-8")
+
+    reviewer = LocalAiReviewer(
+        enabled=True,
+        endpoint="http://localhost:11434/api/generate",
+        model="qwen2.5:0.5b",
+        timeout_seconds=1,
+    )
+
+    prompt = reviewer._build_prompt(_article(), html_path, ["Resumen has 252 words"])
+
+    assert "Criterios MLS obligatorios" in prompt
+    assert "título/caption de figura, subtítulo si existe, imagen o cuadrícula, nota" in prompt
+    assert "No sugieras cambiar DOI" in prompt
 
 
 def _article() -> Article:

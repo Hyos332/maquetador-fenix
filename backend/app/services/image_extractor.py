@@ -170,6 +170,10 @@ class ImageExtractor:
         if not isinstance(block, TableBlock) or image_count <= 1:
             return []
 
+        positioned_cells = self._table_positioned_image_cells(block, image_count)
+        if positioned_cells:
+            return [_join_caption(base_caption, cell) for cell in positioned_cells]
+
         cells = [clean_word_text(cell) for row in block.rows for cell in row if clean_word_text(cell)]
         if len(cells) < image_count:
             return []
@@ -189,6 +193,22 @@ class ImageExtractor:
             return []
 
         return positions
+
+    def _table_positioned_image_cells(self, block: TableBlock, image_count: int) -> list[str]:
+        positions = list(block.image_cell_positions)
+        if len(positions) != image_count:
+            return []
+
+        cells: list[str] = []
+        for row_index, col_index in positions:
+            if row_index >= len(block.rows) or col_index >= len(block.rows[row_index]):
+                return []
+            cell = clean_word_text(block.rows[row_index][col_index])
+            if not cell:
+                return []
+            cells.append(cell)
+
+        return cells
 
     def _warn_if_complex_image_text(
         self,

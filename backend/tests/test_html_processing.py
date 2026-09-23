@@ -3,10 +3,12 @@ from pathlib import Path
 from lxml import html
 
 from app.models.article import Article, Author, Figure, Section
+from app.services.docx_parser import ParagraphBlock, ParsedDocument, TableBlock
 from app.models.pipeline import PipelineStatus
 from app.services.html_renderer import IntermediateHtmlRenderer
 from app.services.html_processor import HtmlProcessor
 from app.services.journal_config import JournalConfigService
+from app.services.section_extractor import SectionExtractor
 from app.services.validator import Validator
 from app.tests_helpers import build_alberto_article
 
@@ -138,4 +140,55 @@ def test_renderer_keeps_multi_image_table_as_figure_grid() -> None:
 
     assert len(root.xpath("//table[contains(concat(' ', normalize-space(@class), ' '), ' figure-grid ')]")) == 1
     assert len(root.xpath("//table[contains(concat(' ', normalize-space(@class), ' '), ' figure-grid ')]//img")) == 4
-    assert rendered.count("Figura 2</i>") == 1
+    assert rendered.count('class="figure-grid"') == 1
+    assert "Condición A" in rendered
+
+
+def test_section_extractor_preserves_group_caption_before_figure_grid() -> None:
+    parsed = ParsedDocument(
+        path=Path("article.docx"),
+        blocks=(
+            ParagraphBlock(index=1, text="Resultados"),
+            ParagraphBlock(index=2, text="Figura 2"),
+            ParagraphBlock(index=3, text="Subtítulo de la figura compuesta"),
+            TableBlock(
+                index=4,
+                rows=(("Condición A", "Condición B"),),
+                image_relationship_ids=("rFigureA", "rFigureB"),
+                image_cell_positions=((0, 0), (0, 1)),
+            ),
+            ParagraphBlock(index=5, text="Nota: elaboración propia."),
+        ),
+        image_relationships={},
+        chart_relationships={},
+    )
+    figures = [
+        Figure(
+            number=1,
+            source=Path("word/media/a.png"),
+            output_filename="Figure_1.PNG",
+            caption="Figura 2. Condición A",
+            block_index=3,
+            caption_block_index=1,
+            group_id="figure-table-3",
+            group_row=0,
+            group_col=0,
+        ),
+        Figure(
+            number=2,
+            source=Path("word/media/b.png"),
+            output_filename="Figure_2.PNG",
+            caption="Figura 2. Condición B",
+            block_index=3,
+            caption_block_index=1,
+            group_id="figure-table-3",
+            group_row=0,
+            group_col=1,
+        ),
+    ]
+
+    section = SectionExtractor().extract(parsed, figures=figures)[0]
+
+    assert section.html_content.index("Figura 2") < section.html_content.index("<!-- FIGURE:1 -->")
+    assert section.html_content.index("Subtítulo") < section.html_content.index("<!-- FIGURE:1 -->")
+    assert section.html_content.index("<!-- FIGURE:2 -->") < section.html_content.index("Nota: elaboración")
