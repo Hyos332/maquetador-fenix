@@ -55,6 +55,9 @@ class Figure(BaseModel):
     is_logo: bool = False
     block_index: int | None = None
     caption_block_index: int | None = None
+    group_id: str | None = None
+    group_row: int | None = None
+    group_col: int | None = None
 
 
 class ArticleTable(BaseModel):

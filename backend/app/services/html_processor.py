@@ -123,6 +123,9 @@ class HtmlProcessor:
             source = Path(image.get("src", "")).name
             if not source.lower().startswith("figure_"):
                 continue
+            if _has_ancestor_class(image, "figure-grid"):
+                image.set("style", "max-width: 100%; height: auto;")
+                continue
             image.set("style", journal.image_style.html_style)
 
     def _linkify_urls(self, root: html.HtmlElement) -> None:
@@ -251,3 +254,11 @@ def _normalize_orcid_url(value: str) -> str | None:
     if not match:
         return None
     return f"https://orcid.org/{match.group(1).upper()}"
+
+
+def _has_ancestor_class(element: html.HtmlElement, class_name: str) -> bool:
+    for ancestor in element.iterancestors():
+        classes = ancestor.get("class", "").split()
+        if class_name in classes:
+            return True
+    return False

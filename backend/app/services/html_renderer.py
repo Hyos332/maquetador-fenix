@@ -25,8 +25,17 @@ class IntermediateHtmlRenderer:
         title = article.primary_title
         author_html = "\n".join(self._render_author(author) for author in article.authors)
         figures_by_number = {figure.number: figure for figure in article.figures}
+        figure_groups = _figure_groups(article.figures)
+        rendered_groups: set[str] = set()
         sections_html = "\n".join(
-            self._render_section(section.title, section.html_content, figures_by_number, journal)
+            self._render_section(
+                section.title,
+                section.html_content,
+                figures_by_number,
+                figure_groups,
+                rendered_groups,
+                journal,
+            )
             for section in article.sections
         )
         references_html = "\n".join(self._render_reference(reference) for reference in article.references)
@@ -113,9 +122,17 @@ class IntermediateHtmlRenderer:
         title: str,
         html_content: str,
         figures_by_number: dict[int, Figure],
+        figure_groups: dict[str, list[Figure]],
+        rendered_groups: set[str],
         journal: JournalConfig,
     ) -> str:
-        html_content = self._replace_figure_placeholders(html_content, figures_by_number, journal)
+        html_content = self._replace_figure_placeholders(
+            html_content,
+            figures_by_number,
+            figure_groups,
+            rendered_groups,
+            journal,
+        )
         return f'<div>\n<p class="title">{escape(title)}</p>\n{html_content}\n</div>'
 
     def _render_figure(self, figure, journal: JournalConfig) -> str:
@@ -128,6 +145,60 @@ class IntermediateHtmlRenderer:
             "</div>"
         )
 
+    def _render_figure_group(self, figures: list[Figure]) -> str:
+        sorted_figures = sorted(
+            figures,
+            key=lambda figure: (
+                figure.group_row if figure.group_row is not None else 0,
+                figure.group_col if figure.group_col is not None else 0,
+                figure.number,
+            ),
+        )
+        rows: dict[int, dict[int, Figure]] = {}
+        for figure in sorted_figures:
+            row = figure.group_row if figure.group_row is not None else 0
+            col = figure.group_col if figure.group_col is not None else len(rows.get(row, {}))
+            rows.setdefault(row, {})[col] = figure
+
+        max_col = max((col for row in rows.values() for col in row), default=0)
+        table_rows = []
+        for row_index in sorted(rows):
+            cells = []
+            for col_index in range(max_col + 1):
+                figure = rows[row_index].get(col_index)
+                if figure is None:
+                    cells.append('<td style="border: 1px solid #9ca3af; padding: 6px;"></td>')
+                    continue
+
+                caption = _subcaption(figure)
+                caption_html = (
+                    f'<p style="margin: 0 0 5px; font-size: 12px; font-weight: 700;">{escape(caption)}</p>'
+                    if caption
+                    else ""
+                )
+                alt = escape(figure.caption or figure.output_filename)
+                cells.append(
+                    '<td style="border: 1px solid #9ca3af; padding: 6px; text-align: center; vertical-align: top;">'
+                    f"{caption_html}"
+                    f'<img src="{escape(figure.output_filename)}" alt="{alt}" '
+                    'style="max-width: 100%; height: auto;">'
+                    "</td>"
+                )
+            table_rows.append("<tr>" + "".join(cells) + "</tr>")
+
+        group_caption = _group_caption(sorted_figures)
+        group_caption_html = f"<p><i>{escape(group_caption)}</i></p>" if group_caption else ""
+        return (
+            '<div class="center-text">'
+            '<table class="figure-grid" '
+            'style="width: auto; max-width: 900px; margin: 12px auto; border-collapse: collapse; table-layout: fixed;">'
+            "<tbody>"
+            + "".join(table_rows)
+            + "</tbody></table>"
+            + group_caption_html
+            + "</div>"
+        )
+
     def _render_reference(self, reference: Reference) -> str:
         return f'<p id="ref-{reference.number}">[{reference.number}] {escape(reference.raw_text)}</p>'
 
@@ -135,12 +206,19 @@ class IntermediateHtmlRenderer:
         self,
         html_content: str,
         figures_by_number: dict[int, Figure],
+        figure_groups: dict[str, list[Figure]],
+        rendered_groups: set[str],
         journal: JournalConfig,
     ) -> str:
         def replace(match: re.Match[str]) -> str:
             figure = figures_by_number.get(int(match.group(1)))
             if not figure:
                 return ""
+            if figure.group_id:
+                if figure.group_id in rendered_groups:
+                    return ""
+                rendered_groups.add(figure.group_id)
+                return self._render_figure_group(figure_groups.get(figure.group_id, [figure]))
             return self._render_figure(figure, journal)
 
         return FIGURE_PLACEHOLDER_PATTERN.sub(replace, html_content)
@@ -213,3 +291,31 @@ def _citation_journal_name(journal: JournalConfig) -> str:
     if journal.key == "mlshnr":
         return "MLS-Health & Nutrition Research"
     return journal.name
+
+
+def _figure_groups(figures: list[Figure]) -> dict[str, list[Figure]]:
+    groups: dict[str, list[Figure]] = {}
+    for figure in figures:
+        if not figure.group_id:
+            continue
+        groups.setdefault(figure.group_id, []).append(figure)
+    return groups
+
+
+def _group_caption(figures: list[Figure]) -> str | None:
+    for figure in figures:
+        if not figure.caption:
+            continue
+        first_part = figure.caption.split(".", 1)[0].strip()
+        if first_part.casefold().startswith(("figura ", "figure ")):
+            return first_part
+    return None
+
+
+def _subcaption(figure: Figure) -> str | None:
+    if not figure.caption:
+        return None
+    group_caption = _group_caption([figure])
+    if group_caption and figure.caption.startswith(group_caption):
+        return figure.caption[len(group_caption) :].lstrip(".:; ").strip() or None
+    return figure.caption

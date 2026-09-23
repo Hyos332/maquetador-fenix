@@ -180,6 +180,7 @@ def test_image_extractor_uses_table_cell_text_for_multi_image_table(tmp_path: Pa
                 index=2,
                 rows=(("Condición A", "Condición B"),),
                 image_relationship_ids=("rFigureA", "rFigureB"),
+                image_cell_positions=((0, 0), (0, 1)),
             ),
             ParagraphBlock(index=3, text="Figura 3"),
         ),
@@ -197,6 +198,8 @@ def test_image_extractor_uses_table_cell_text_for_multi_image_table(tmp_path: Pa
         "Figura 2. Condición A",
         "Figura 2. Condición B",
     ]
+    assert [figure.group_id for figure in result.figures] == ["figure-table-1", "figure-table-1"]
+    assert [(figure.group_row, figure.group_col) for figure in result.figures] == [(0, 0), (0, 1)]
 
 
 def test_image_extractor_prefers_previous_caption_for_image_between_captions(tmp_path: Path) -> None:

@@ -2,7 +2,9 @@ from pathlib import Path
 
 from lxml import html
 
+from app.models.article import Article, Author, Figure, Section
 from app.models.pipeline import PipelineStatus
+from app.services.html_renderer import IntermediateHtmlRenderer
 from app.services.html_processor import HtmlProcessor
 from app.services.journal_config import JournalConfigService
 from app.services.validator import Validator
@@ -66,3 +68,74 @@ def test_pipeline_generates_valid_postprocessed_html(tmp_path: Path) -> None:
     references_index = rendered_html.index('<p class="title">Referencias</p>')
     assert rendered_html.index("Figure_1.PNG") < references_index
     assert rendered_html.index("Figure_7.PNG") < references_index
+
+
+def test_renderer_keeps_multi_image_table_as_figure_grid() -> None:
+    journal = JournalConfigService().load("mlser")
+    article = Article(
+        journal="mlser",
+        title_es="Artículo con figura compuesta",
+        authors=[Author(full_name="Ana Test")],
+        sections=[
+            Section(
+                title="Resultados",
+                html_content=(
+                    "<p>Antes</p>\n"
+                    "<!-- FIGURE:1 -->\n"
+                    "<!-- FIGURE:2 -->\n"
+                    "<!-- FIGURE:3 -->\n"
+                    "<!-- FIGURE:4 -->\n"
+                    "<p>Después</p>"
+                ),
+            )
+        ],
+        figures=[
+            Figure(
+                number=1,
+                source=Path("word/media/a.png"),
+                output_filename="Figure_1.PNG",
+                caption="Figura 2. Condición A",
+                block_index=1,
+                group_id="figure-table-1",
+                group_row=0,
+                group_col=0,
+            ),
+            Figure(
+                number=2,
+                source=Path("word/media/b.png"),
+                output_filename="Figure_2.PNG",
+                caption="Figura 2. Condición B",
+                block_index=1,
+                group_id="figure-table-1",
+                group_row=0,
+                group_col=1,
+            ),
+            Figure(
+                number=3,
+                source=Path("word/media/c.png"),
+                output_filename="Figure_3.PNG",
+                caption="Figura 2. Condición C",
+                block_index=1,
+                group_id="figure-table-1",
+                group_row=1,
+                group_col=0,
+            ),
+            Figure(
+                number=4,
+                source=Path("word/media/d.png"),
+                output_filename="Figure_4.PNG",
+                caption="Figura 2. Condición D",
+                block_index=1,
+                group_id="figure-table-1",
+                group_row=1,
+                group_col=1,
+            ),
+        ],
+    )
+
+    rendered = IntermediateHtmlRenderer().render(article, journal)
+    root = html.fromstring(rendered)
+
+    assert len(root.xpath("//table[contains(concat(' ', normalize-space(@class), ' '), ' figure-grid ')]")) == 1
+    assert len(root.xpath("//table[contains(concat(' ', normalize-space(@class), ' '), ' figure-grid ')]//img")) == 4
+    assert rendered.count("Figura 2</i>") == 1

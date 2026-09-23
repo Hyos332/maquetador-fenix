@@ -51,6 +51,7 @@ class TableBlock:
     index: int
     rows: tuple[tuple[str, ...], ...]
     image_relationship_ids: tuple[str, ...] = ()
+    image_cell_positions: tuple[tuple[int, int], ...] = ()
     chart_relationship_ids: tuple[str, ...] = ()
 
 
@@ -194,24 +195,30 @@ class DocxParser:
 
     def _parse_table(self, table: etree._Element, index: int) -> TableBlock | None:
         rows: list[tuple[str, ...]] = []
+        image_ids: list[str] = []
+        image_positions: list[tuple[int, int]] = []
+        chart_ids: list[str] = []
 
-        for row in table.xpath("./w:tr", namespaces=NS):
+        for row_index, row in enumerate(table.xpath("./w:tr", namespaces=NS)):
             cells: list[str] = []
-            for cell in row.xpath("./w:tc", namespaces=NS):
+            for col_index, cell in enumerate(row.xpath("./w:tc", namespaces=NS)):
                 paragraphs = [self._paragraph_text(p) for p in cell.xpath("./w:p", namespaces=NS)]
                 cells.append(" | ".join(text for text in paragraphs if text))
+                cell_image_ids = tuple(cell.xpath(".//a:blip/@r:embed", namespaces=NS))
+                image_ids.extend(cell_image_ids)
+                image_positions.extend((row_index, col_index) for _ in cell_image_ids)
+                chart_ids.extend(cell.xpath(".//c:chart/@r:id", namespaces=NS))
             rows.append(tuple(cells))
 
-        image_ids = tuple(table.xpath(".//a:blip/@r:embed", namespaces=NS))
-        chart_ids = tuple(table.xpath(".//c:chart/@r:id", namespaces=NS))
         if not rows and not image_ids and not chart_ids:
             return None
 
         return TableBlock(
             index=index,
             rows=tuple(rows),
-            image_relationship_ids=image_ids,
-            chart_relationship_ids=chart_ids,
+            image_relationship_ids=tuple(image_ids),
+            image_cell_positions=tuple(image_positions),
+            chart_relationship_ids=tuple(chart_ids),
         )
 
     def _paragraph_text(self, paragraph: etree._Element) -> str:

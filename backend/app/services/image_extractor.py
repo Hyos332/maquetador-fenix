@@ -48,6 +48,8 @@ class ImageExtractor:
             embedded_text = _block_text(block)
             image_relationship_ids = list(block.image_relationship_ids)
             table_captions = self._table_image_captions(block, caption, len(image_relationship_ids))
+            table_positions = self._table_image_positions(block, len(image_relationship_ids))
+            group_id = f"figure-table-{block_index}" if table_positions else None
 
             for image_index, relationship_id in enumerate(image_relationship_ids):
                 if relationship_id in seen_relationship_ids:
@@ -75,6 +77,9 @@ class ImageExtractor:
                         caption=table_captions[image_index] if image_index < len(table_captions) else caption,
                         block_index=block_index,
                         caption_block_index=caption_block_index,
+                        group_id=group_id,
+                        group_row=table_positions[image_index][0] if image_index < len(table_positions) else None,
+                        group_col=table_positions[image_index][1] if image_index < len(table_positions) else None,
                     )
                 )
                 self._warn_if_complex_image_text(
@@ -170,6 +175,20 @@ class ImageExtractor:
             return []
 
         return [_join_caption(base_caption, cell) for cell in cells[:image_count]]
+
+    def _table_image_positions(
+        self,
+        block: DocumentBlock,
+        image_count: int,
+    ) -> list[tuple[int, int]]:
+        if not isinstance(block, TableBlock) or image_count <= 1:
+            return []
+
+        positions = list(block.image_cell_positions)
+        if len(positions) != image_count:
+            return []
+
+        return positions
 
     def _warn_if_complex_image_text(
         self,
