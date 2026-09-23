@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from html import escape
 
-from app.models.article import Figure, Section
+from app.models.article import ArticleTable, Figure, Section
 from app.services.docx_parser import ParagraphBlock, ParsedDocument, TableBlock
 from app.utils.strings import clean_word_text, normalize_for_match
 
@@ -26,11 +26,17 @@ MAIN_SECTION_TITLES = {
 
 
 class SectionExtractor:
-    def extract(self, parsed: ParsedDocument, figures: list[Figure] | None = None) -> list[Section]:
+    def extract(
+        self,
+        parsed: ParsedDocument,
+        figures: list[Figure] | None = None,
+        tables: list[ArticleTable] | None = None,
+    ) -> list[Section]:
         sections: list[Section] = []
         current_title: str | None = None
         current_html: list[str] = []
         figures_by_block = _figures_by_block_index(figures or [])
+        tables_by_block = _tables_by_block_index(tables or [])
         caption_block_indexes = {
             figure.caption_block_index
             for figure in figures or []
@@ -90,6 +96,9 @@ class SectionExtractor:
                     else:
                         current_html.append(f"<p>{escape(text)}</p>")
             elif isinstance(block, TableBlock) and current_title and block.rows:
+                if block_index in tables_by_block:
+                    current_html.append(f"<!-- TABLE:{tables_by_block[block_index].number} -->")
+                    continue
                 current_html.append(_table_to_html(block))
 
         if current_title:
@@ -129,6 +138,15 @@ def _figures_by_block_index(figures: list[Figure]) -> dict[int, list[Figure]]:
             continue
         figures_by_block.setdefault(figure.block_index, []).append(figure)
     return figures_by_block
+
+
+def _tables_by_block_index(tables: list[ArticleTable]) -> dict[int, ArticleTable]:
+    tables_by_block: dict[int, ArticleTable] = {}
+    for table in tables:
+        if table.block_index is None:
+            continue
+        tables_by_block[table.block_index] = table
+    return tables_by_block
 
 
 def _block_has_media(block) -> bool:

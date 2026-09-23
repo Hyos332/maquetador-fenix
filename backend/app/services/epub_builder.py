@@ -50,6 +50,13 @@ class EpubBuilder:
                     assets_dir / figure.output_filename,
                     f"{EPUB_DIR}/{figure.output_filename}",
                 )
+            for table in article.tables:
+                if table.output_filename:
+                    self._write_asset_if_exists(
+                        archive,
+                        assets_dir / table.output_filename,
+                        f"{EPUB_DIR}/{table.output_filename}",
+                    )
 
         return output_path
 
@@ -104,6 +111,11 @@ class EpubBuilder:
             f'    <item id="figure-{figure.number}" href="{escape(figure.output_filename)}" media-type="image/png" />'
             for figure in article.figures
         )
+        table_items = "\n".join(
+            f'    <item id="table-{table.number}" href="{escape(table.output_filename)}" media-type="image/png" />'
+            for table in article.tables
+            if table.output_filename
+        )
         logo_item = ""
         if (assets_dir / journal.logo).exists():
             logo_media_type = mimetypes.guess_type(journal.logo)[0] or "image/svg+xml"
@@ -125,6 +137,7 @@ class EpubBuilder:
     <item id="css" href="galleys.css" media-type="text/css" />
 {logo_item}
 {figure_items}
+{table_items}
   </manifest>
   <spine>
     <itemref idref="article" />

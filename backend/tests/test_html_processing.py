@@ -9,6 +9,7 @@ from app.services.html_renderer import IntermediateHtmlRenderer
 from app.services.html_processor import HtmlProcessor
 from app.services.journal_config import JournalConfigService
 from app.services.section_extractor import SectionExtractor
+from app.services.table_image_extractor import TableImageExtractor
 from app.services.validator import Validator
 from app.tests_helpers import build_alberto_article
 
@@ -245,3 +246,25 @@ def test_section_extractor_preserves_text_rows_around_media_table() -> None:
 
     assert section.html_content.index("Aumento de la sensibilidad") < section.html_content.index("<!-- FIGURE:1 -->")
     assert section.html_content.index("<!-- FIGURE:2 -->") < section.html_content.index("Nota: elaboración propia.")
+
+
+def test_table_image_extractor_captures_body_tables_only() -> None:
+    parsed = ParsedDocument(
+        path=Path("article.docx"),
+        blocks=(
+            TableBlock(index=1, rows=(("Resumen", "Texto"),)),
+            ParagraphBlock(index=2, text="Introducción"),
+            ParagraphBlock(index=3, text="Texto previo."),
+            TableBlock(index=4, rows=(("Celda A", "Celda B"), ("Celda C", "Celda D"))),
+            ParagraphBlock(index=5, text="Referencias"),
+            TableBlock(index=6, rows=(("No", "capturar"),)),
+        ),
+        image_relationships={},
+        chart_relationships={},
+    )
+
+    result = TableImageExtractor().extract_tables(parsed)
+
+    assert len(result.tables) == 1
+    assert result.tables[0].output_filename == "Table_1.PNG"
+    assert result.tables[0].block_index == 3

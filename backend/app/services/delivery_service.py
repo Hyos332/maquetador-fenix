@@ -44,6 +44,12 @@ class DeliveryService:
                 assets_dir / figure.output_filename,
                 delivery_dir / figure.output_filename,
             )
+        for table in article.tables:
+            if table.output_filename:
+                self._copy_if_exists(
+                    assets_dir / table.output_filename,
+                    delivery_dir / table.output_filename,
+                )
 
         delivery_zip = author_dir / f"{file_stem}_{language_suffix}.zip"
         self._zip_delivery(delivery_dir, delivery_zip)

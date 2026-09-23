@@ -88,7 +88,12 @@ class Validator:
 
         for image in root.xpath("//img[@src]"):
             source = Path(image.get("src", "")).name
-            if not source.lower().startswith("figure_"):
+            lowered_source = source.lower()
+            if lowered_source.startswith("table_"):
+                if assets_dir and not (assets_dir / source).exists():
+                    errors.append(f"Table image referenced by HTML does not exist: {source}")
+                continue
+            if not lowered_source.startswith("figure_"):
                 continue
             expected_style = (
                 "max-width: 100%; height: auto;"
@@ -138,6 +143,12 @@ class Validator:
                 figure_path = f"EPUB/{figure.output_filename}"
                 if figure_path not in names:
                     errors.append(f"EPUB missing figure: {figure_path}")
+            for table in article.tables:
+                if not table.output_filename:
+                    continue
+                table_path = f"EPUB/{table.output_filename}"
+                if table_path not in names:
+                    errors.append(f"EPUB missing table image: {table_path}")
 
             if f"EPUB/{journal.logo}" not in names:
                 warnings.append(f"EPUB missing journal logo: {journal.logo}")

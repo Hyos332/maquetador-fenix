@@ -20,6 +20,7 @@ from app.services.metadata_extractor import MetadataExtractor
 from app.services.mls_automation import MlsAutomationService
 from app.services.reference_processor import ReferenceProcessor
 from app.services.section_extractor import SectionExtractor
+from app.services.table_image_extractor import TableImageExtractor
 from app.services.validator import Validator
 from app.services.zip_service import ZipService
 from app.utils.strings import word_count
@@ -37,6 +38,7 @@ class ArticlePipeline:
         self.section_extractor = SectionExtractor()
         self.reference_processor = ReferenceProcessor()
         self.image_extractor = ImageExtractor()
+        self.table_image_extractor = TableImageExtractor()
         self.journal_config_service = JournalConfigService()
         self.html_renderer = IntermediateHtmlRenderer()
         self.html_processor = HtmlProcessor()
@@ -68,12 +70,22 @@ class ArticlePipeline:
             output_dir=package.workspace.generated_dir,
         )
         article.figures = image_result.figures
-        article.sections = self.section_extractor.extract(parsed, figures=article.figures)
+        table_result = self.table_image_extractor.extract_tables(
+            parsed,
+            output_dir=package.workspace.generated_dir,
+        )
+        article.tables = table_result.tables
+        article.sections = self.section_extractor.extract(
+            parsed,
+            figures=article.figures,
+            tables=article.tables,
+        )
         article.references = self.reference_processor.extract(parsed)
 
         warnings = []
         warnings.extend(self.reference_processor.sequence_warnings(article.references))
         warnings.extend(image_result.warnings)
+        warnings.extend(table_result.warnings)
         warnings.extend(self._abstract_warnings(article.abstract_es, "Resumen"))
         warnings.extend(self._abstract_warnings(article.abstract_en, "Abstract"))
         journal = self.journal_config_service.load(article.journal)

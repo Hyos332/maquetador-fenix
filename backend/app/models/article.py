@@ -66,6 +66,8 @@ class ArticleTable(BaseModel):
     number: int = Field(ge=1)
     caption: str | None = None
     html_content: str
+    output_filename: str | None = None
+    block_index: int | None = None
 
 
 class Reference(BaseModel):

@@ -11,6 +11,7 @@ from app.utils.dates import format_short_spanish_date
 from app.utils.files import ensure_directory
 
 FIGURE_PLACEHOLDER_PATTERN = re.compile(r"<!--\s*FIGURE:(\d+)\s*-->")
+TABLE_PLACEHOLDER_PATTERN = re.compile(r"<!--\s*TABLE:(\d+)\s*-->")
 
 
 class IntermediateHtmlRenderer:
@@ -26,6 +27,7 @@ class IntermediateHtmlRenderer:
         author_html = "\n".join(self._render_author(author) for author in article.authors)
         figures_by_number = {figure.number: figure for figure in article.figures}
         figure_groups = _figure_groups(article.figures)
+        tables_by_number = {table.number: table for table in article.tables}
         rendered_groups: set[str] = set()
         sections_html = "\n".join(
             self._render_section(
@@ -33,6 +35,7 @@ class IntermediateHtmlRenderer:
                 section.html_content,
                 figures_by_number,
                 figure_groups,
+                tables_by_number,
                 rendered_groups,
                 journal,
             )
@@ -123,6 +126,7 @@ class IntermediateHtmlRenderer:
         html_content: str,
         figures_by_number: dict[int, Figure],
         figure_groups: dict[str, list[Figure]],
+        tables_by_number,
         rendered_groups: set[str],
         journal: JournalConfig,
     ) -> str:
@@ -133,6 +137,7 @@ class IntermediateHtmlRenderer:
             rendered_groups,
             journal,
         )
+        html_content = self._replace_table_placeholders(html_content, tables_by_number)
         return f'<div>\n<p class="title">{escape(title)}</p>\n{html_content}\n</div>'
 
     def _render_figure(self, figure, journal: JournalConfig) -> str:
@@ -219,6 +224,21 @@ class IntermediateHtmlRenderer:
             return self._render_figure(figure, journal)
 
         return FIGURE_PLACEHOLDER_PATTERN.sub(replace, html_content)
+
+    def _replace_table_placeholders(self, html_content: str, tables_by_number) -> str:
+        def replace(match: re.Match[str]) -> str:
+            table = tables_by_number.get(int(match.group(1)))
+            if not table or not table.output_filename:
+                return ""
+            alt = escape(table.caption or f"Tabla {table.number}")
+            return (
+                '<div class="center-text table-image">'
+                f'<img src="{escape(table.output_filename)}" alt="{alt}" '
+                'style="max-width: 100%; height: auto;">'
+                "</div>"
+            )
+
+        return TABLE_PLACEHOLDER_PATTERN.sub(replace, html_content)
 
     def _render_dates(self, article: Article) -> str:
         return (
