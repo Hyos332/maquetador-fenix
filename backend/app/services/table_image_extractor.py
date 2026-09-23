@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import subprocess
 import tempfile
 from dataclasses import dataclass, field
 from html import escape
@@ -21,6 +22,15 @@ class TableImageExtractionResult:
     warnings: list[str] = field(default_factory=list)
 
 
+@dataclass(frozen=True)
+class _TableCandidate:
+    number: int
+    block_index: int
+    output_filename: str
+    html_content: str
+    signature: str
+
+
 class TableImageExtractor:
     def extract_tables(
         self,
@@ -32,6 +42,7 @@ class TableImageExtractor:
         if output_dir:
             ensure_directory(output_dir)
 
+        candidates: list[_TableCandidate] = []
         inside_article_body = False
         for block_index, block in enumerate(parsed.blocks):
             block_text = _block_text(block)
@@ -47,52 +58,128 @@ class TableImageExtractor:
             if not isinstance(block, TableBlock) or not _should_capture_table(block):
                 continue
 
-            table_number = len(tables) + 1
+            table_number = len(candidates) + 1
             output_filename = f"Table_{table_number}.PNG"
-            html_content = _table_to_html(block)
-            if output_dir:
-                try:
-                    self._render_table_png(html_content, output_dir / output_filename)
-                except (OSError, PlaywrightError) as exc:
-                    warnings.append(f"Could not render {output_filename}: {exc}")
-                    continue
+            candidates.append(
+                _TableCandidate(
+                    number=table_number,
+                    block_index=block_index,
+                    output_filename=output_filename,
+                    html_content=_table_to_html(block),
+                    signature=_table_signature(block),
+                )
+            )
 
+        captured_numbers: set[int] | None = None
+        if output_dir and candidates:
+            try:
+                captured_numbers = self._capture_original_tables(parsed.path, candidates, output_dir, warnings)
+            except (OSError, RuntimeError, subprocess.SubprocessError, PlaywrightError) as exc:
+                warnings.append(f"Could not capture original DOCX tables: {exc}")
+                return TableImageExtractionResult(tables=[], warnings=warnings)
+
+        for candidate in candidates:
+            if captured_numbers is not None and candidate.number not in captured_numbers:
+                continue
             tables.append(
                 ArticleTable(
-                    number=table_number,
-                    html_content=html_content,
-                    output_filename=output_filename,
-                    block_index=block_index,
+                    number=candidate.number,
+                    html_content=candidate.html_content,
+                    output_filename=candidate.output_filename,
+                    block_index=candidate.block_index,
                 )
             )
 
         return TableImageExtractionResult(tables=tables, warnings=warnings)
 
-    def _render_table_png(self, html_content: str, output_path: Path) -> None:
-        document = f"""
-<!doctype html>
-<html>
-<head>
-<meta charset="utf-8">
-<style>
-body {{ margin: 0; padding: 16px; background: white; font-family: Arial, sans-serif; }}
-table {{ border-collapse: collapse; width: auto; max-width: 980px; font-size: 16px; }}
-td {{ border: 1px solid #111; padding: 8px 10px; vertical-align: top; white-space: pre-wrap; }}
-</style>
-</head>
-<body>{html_content}</body>
-</html>
-"""
+    def _capture_original_tables(
+        self,
+        docx_path: Path,
+        candidates: list[_TableCandidate],
+        output_dir: Path,
+        warnings: list[str],
+    ) -> set[int]:
+        captured_numbers: set[int] = set()
         with tempfile.TemporaryDirectory() as temporary_dir:
-            html_path = Path(temporary_dir) / "table.html"
-            html_path.write_text(document, encoding="utf-8")
+            converted_html = self._convert_docx_to_html(docx_path, Path(temporary_dir))
             with sync_playwright() as playwright:
                 browser = playwright.chromium.launch(headless=True)
-                page = browser.new_page(device_scale_factor=2)
-                page.goto(html_path.as_uri())
-                table = page.locator("table").first
-                table.screenshot(path=str(output_path))
-                browser.close()
+                try:
+                    page = browser.new_page(device_scale_factor=2, viewport={"width": 1400, "height": 1200})
+                    page.goto(converted_html.as_uri(), wait_until="load")
+                    page.add_style_tag(
+                        content="body { background: white !important; padding-left: 120px !important; }"
+                    )
+                    tables = page.locator("table")
+                    used_indexes: set[int] = set()
+                    for candidate in candidates:
+                        table_index = self._find_rendered_table_index(tables, candidate.signature, used_indexes)
+                        if table_index is None:
+                            warnings.append(f"Could not match original DOCX table for {candidate.output_filename}.")
+                            continue
+
+                        used_indexes.add(table_index)
+                        locator = tables.nth(table_index)
+                        locator.scroll_into_view_if_needed()
+                        self._screenshot_with_padding(page, locator, output_dir / candidate.output_filename)
+                        captured_numbers.add(candidate.number)
+                finally:
+                    browser.close()
+        return captured_numbers
+
+    def _screenshot_with_padding(self, page, locator, output_path: Path) -> None:
+        box = locator.bounding_box()
+        if box is None:
+            locator.screenshot(path=str(output_path))
+            return
+
+        padding_x = 90
+        padding_y = 12
+        clip = {
+            "x": max(box["x"] - padding_x, 0),
+            "y": max(box["y"] - padding_y, 0),
+            "width": box["width"] + padding_x * 2,
+            "height": box["height"] + padding_y * 2,
+        }
+        page.screenshot(path=str(output_path), clip=clip)
+
+    def _convert_docx_to_html(self, docx_path: Path, output_dir: Path) -> Path:
+        result = subprocess.run(
+            [
+                "libreoffice",
+                "--headless",
+                "--convert-to",
+                "html",
+                "--outdir",
+                str(output_dir),
+                str(docx_path),
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        if result.returncode != 0:
+            message = (result.stderr or result.stdout or "unknown LibreOffice error").strip()
+            raise RuntimeError(message)
+
+        html_files = sorted(output_dir.glob("*.html"))
+        if not html_files:
+            raise RuntimeError("LibreOffice did not produce HTML")
+        return html_files[0]
+
+    def _find_rendered_table_index(self, tables, signature: str, used_indexes: set[int]) -> int | None:
+        count = tables.count()
+        for index in range(count):
+            if index in used_indexes:
+                continue
+            rendered_text = tables.nth(index).evaluate(
+                '(element) => element.innerText || element.textContent || ""',
+            )
+            normalized = normalize_for_match(rendered_text)
+            if signature and signature in normalized:
+                return index
+        return None
 
 
 def _should_capture_table(block: TableBlock) -> bool:
@@ -116,6 +203,15 @@ def _table_to_html(block: TableBlock) -> str:
         cells = "".join(f"<td>{escape(cell)}</td>" for cell in cleaned_cells)
         rows.append(f"<tr>{cells}</tr>")
     return "<table><tbody>" + "".join(rows) + "</tbody></table>"
+
+
+def _table_signature(block: TableBlock) -> str:
+    for row in block.rows:
+        for cell in row:
+            text = clean_word_text(cell.replace("|", " "))
+            if len(text) >= 12:
+                return normalize_for_match(text[:80])
+    return normalize_for_match(_block_text(block).replace("|", " ")[:80])
 
 
 def _block_text(block) -> str:

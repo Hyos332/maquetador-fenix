@@ -9,6 +9,7 @@ from app.exceptions import AutomationError
 from app.models.article import Article, Author, Section
 
 FIGURE_PLACEHOLDER_PATTERN = re.compile(r"<!--\s*FIGURE:(\d+)\s*-->")
+TABLE_PLACEHOLDER_PATTERN = re.compile(r"<!--\s*TABLE:(\d+)\s*-->")
 
 SECTION_TITLE_PLACEHOLDERS = {
     "Español": "Título del bloque",
@@ -190,7 +191,7 @@ class MlsPage:
         return editors
 
     def _set_editor_html(self, editor: Locator, html_content: str) -> None:
-        html_content = _replace_figure_placeholders(html_content)
+        html_content = _replace_media_placeholders(html_content)
         editor.scroll_into_view_if_needed()
         editor.click()
         editor.evaluate(
@@ -265,7 +266,7 @@ class MlsPage:
         return DEFAULT_COUNTRIES.get(self.language, DEFAULT_COUNTRIES["Español"])
 
 
-def _replace_figure_placeholders(html_content: str) -> str:
+def _replace_media_placeholders(html_content: str) -> str:
     def replace(match: re.Match[str]) -> str:
         number = int(match.group(1))
         filename = f"Figure_{number}.PNG"
@@ -274,4 +275,13 @@ def _replace_figure_placeholders(html_content: str) -> str:
             'style="max-width:700px; max-height:600px; width:auto; height:auto;"></p>'
         )
 
-    return FIGURE_PLACEHOLDER_PATTERN.sub(replace, html_content)
+    def replace_table(match: re.Match[str]) -> str:
+        number = int(match.group(1))
+        filename = f"Table_{number}.PNG"
+        return (
+            f'<p class="figure table-image"><img src="{filename}" alt="Table {number}" '
+            'style="max-width:700px; max-height:600px; width:auto; height:auto;"></p>'
+        )
+
+    html_content = FIGURE_PLACEHOLDER_PATTERN.sub(replace, html_content)
+    return TABLE_PLACEHOLDER_PATTERN.sub(replace_table, html_content)
