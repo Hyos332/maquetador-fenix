@@ -28,7 +28,7 @@ class DeliveryService:
         language_suffix = "eng" if article.language == ArticleLanguage.ENGLISH else "esp"
 
         author_dir = ensure_directory(self.deliveries_dir / author_dir_name)
-        delivery_dir = ensure_directory(author_dir / f"{author_dir_name}-{language_suffix}")
+        delivery_dir = self._fresh_delivery_dir(author_dir / f"{author_dir_name}-{language_suffix}")
 
         delivery_html = delivery_dir / f"{file_stem}_{language_suffix}.html"
         delivery_epub = delivery_dir / f"{file_stem}_{language_suffix}.epub"
@@ -47,14 +47,42 @@ class DeliveryService:
 
         delivery_zip = author_dir / f"{file_stem}_{language_suffix}.zip"
         self._zip_delivery(delivery_dir, delivery_zip)
+        self._make_tree_writable(delivery_dir)
+        self._make_file_writable(delivery_zip)
         return delivery_dir, delivery_zip
 
     def _copy_if_exists(self, source: Path, destination: Path) -> None:
         if source.exists():
             shutil.copy2(source, destination)
 
+    def _fresh_delivery_dir(self, delivery_dir: Path) -> Path:
+        if delivery_dir.exists():
+            self._make_tree_writable(delivery_dir)
+            shutil.rmtree(delivery_dir)
+        return ensure_directory(delivery_dir)
+
     def _zip_delivery(self, delivery_dir: Path, delivery_zip: Path) -> None:
         with zipfile.ZipFile(delivery_zip, "w", compression=zipfile.ZIP_DEFLATED) as archive:
             for path in sorted(delivery_dir.rglob("*")):
                 if path.is_file():
                     archive.write(path, Path(delivery_dir.name) / path.relative_to(delivery_dir))
+
+    def _make_tree_writable(self, path: Path) -> None:
+        if not path.exists():
+            return
+        for child in path.rglob("*"):
+            if child.is_dir():
+                self._chmod_best_effort(child, 0o775)
+            elif child.is_file():
+                self._chmod_best_effort(child, 0o664)
+        self._chmod_best_effort(path, 0o775)
+
+    def _make_file_writable(self, path: Path) -> None:
+        if path.exists():
+            self._chmod_best_effort(path, 0o664)
+
+    def _chmod_best_effort(self, path: Path, mode: int) -> None:
+        try:
+            path.chmod(mode)
+        except OSError:
+            pass
