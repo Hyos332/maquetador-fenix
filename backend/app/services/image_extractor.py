@@ -46,8 +46,10 @@ class ImageExtractor:
             caption_match = self._find_caption(parsed, block_index) or self._caption_from_image_block(block)
             caption, caption_block_index = caption_match if caption_match else (None, None)
             embedded_text = _block_text(block)
+            image_relationship_ids = list(block.image_relationship_ids)
+            table_captions = self._table_image_captions(block, caption, len(image_relationship_ids))
 
-            for relationship_id in block.image_relationship_ids:
+            for image_index, relationship_id in enumerate(image_relationship_ids):
                 if relationship_id in seen_relationship_ids:
                     continue
                 seen_relationship_ids.add(relationship_id)
@@ -70,12 +72,18 @@ class ImageExtractor:
                         number=figure_number,
                         source=Path(relationship.package_path),
                         output_filename=output_filename,
-                        caption=caption,
+                        caption=table_captions[image_index] if image_index < len(table_captions) else caption,
                         block_index=block_index,
                         caption_block_index=caption_block_index,
                     )
                 )
-                self._warn_if_complex_image_text(warnings, output_filename, embedded_text, caption)
+                self._warn_if_complex_image_text(
+                    warnings,
+                    output_filename,
+                    embedded_text,
+                    caption,
+                    handled=bool(table_captions),
+                )
 
             for relationship_id in block.chart_relationship_ids:
                 if relationship_id in seen_relationship_ids:
@@ -111,10 +119,7 @@ class ImageExtractor:
         return ImageExtractionResult(figures=figures, warnings=warnings)
 
     def _find_caption(self, parsed: ParsedDocument, block_index: int) -> tuple[str, int] | None:
-        candidate_indexes = [
-            block_index + offset
-            for offset in (1, -1, 2, -2, 3, -3)
-        ]
+        candidate_indexes = [block_index + offset for offset in (-1, 1, -2, 2, -3, 3)]
         for candidate_index in candidate_indexes:
             if candidate_index < 0 or candidate_index >= len(parsed.blocks):
                 continue
@@ -151,13 +156,31 @@ class ImageExtractor:
             or normalized.startswith("fig. ")
         )
 
+    def _table_image_captions(
+        self,
+        block: DocumentBlock,
+        base_caption: str | None,
+        image_count: int,
+    ) -> list[str]:
+        if not isinstance(block, TableBlock) or image_count <= 1:
+            return []
+
+        cells = [clean_word_text(cell) for row in block.rows for cell in row if clean_word_text(cell)]
+        if len(cells) < image_count:
+            return []
+
+        return [_join_caption(base_caption, cell) for cell in cells[:image_count]]
+
     def _warn_if_complex_image_text(
         self,
         warnings: list[str],
         output_filename: str,
         embedded_text: str,
         caption: str | None,
+        handled: bool = False,
     ) -> None:
+        if handled:
+            return
         if not embedded_text or self._looks_like_caption(embedded_text):
             return
         if caption and normalize_for_match(embedded_text) == normalize_for_match(caption):
@@ -270,3 +293,11 @@ def _block_text(block: DocumentBlock) -> str:
     if isinstance(block, ParagraphBlock):
         return clean_word_text(block.text)
     return clean_word_text(" ".join(cell for row in block.rows for cell in row if cell))
+
+
+def _join_caption(base_caption: str | None, detail: str) -> str:
+    if not base_caption:
+        return detail
+    if normalize_for_match(detail).startswith(normalize_for_match(base_caption)):
+        return detail
+    return f"{base_caption}. {detail}"

@@ -161,6 +161,72 @@ def test_image_extractor_uses_caption_inside_image_table(tmp_path: Path) -> None
     assert result.figures[0].caption == "Figure 1. Study flow diagram"
 
 
+def test_image_extractor_uses_table_cell_text_for_multi_image_table(tmp_path: Path) -> None:
+    docx_path = tmp_path / "article.docx"
+    tiny_png = (
+        b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01"
+        b"\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\rIDATx\x9cc\xf8\xff"
+        b"\xff?\x00\x05\xfe\x02\xfeA\xe2!\xbc\x00\x00\x00\x00IEND\xaeB`\x82"
+    )
+    with ZipFile(docx_path, "w") as archive:
+        archive.writestr("word/media/figure-a.png", tiny_png)
+        archive.writestr("word/media/figure-b.png", tiny_png)
+
+    parsed = ParsedDocument(
+        path=docx_path,
+        blocks=(
+            ParagraphBlock(index=1, text="Figura 2"),
+            TableBlock(
+                index=2,
+                rows=(("Condición A", "Condición B"),),
+                image_relationship_ids=("rFigureA", "rFigureB"),
+            ),
+            ParagraphBlock(index=3, text="Figura 3"),
+        ),
+        image_relationships={
+            "rFigureA": ImageRelationship("rFigureA", "media/figure-a.png", "word/media/figure-a.png"),
+            "rFigureB": ImageRelationship("rFigureB", "media/figure-b.png", "word/media/figure-b.png"),
+        },
+        chart_relationships={},
+    )
+
+    result = ImageExtractor().extract_figures(parsed, output_dir=tmp_path / "figures")
+
+    assert result.warnings == []
+    assert [figure.caption for figure in result.figures] == [
+        "Figura 2. Condición A",
+        "Figura 2. Condición B",
+    ]
+
+
+def test_image_extractor_prefers_previous_caption_for_image_between_captions(tmp_path: Path) -> None:
+    docx_path = tmp_path / "article.docx"
+    tiny_png = (
+        b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01"
+        b"\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\rIDATx\x9cc\xf8\xff"
+        b"\xff?\x00\x05\xfe\x02\xfeA\xe2!\xbc\x00\x00\x00\x00IEND\xaeB`\x82"
+    )
+    with ZipFile(docx_path, "w") as archive:
+        archive.writestr("word/media/figure.png", tiny_png)
+
+    parsed = ParsedDocument(
+        path=docx_path,
+        blocks=(
+            ParagraphBlock(index=1, text="Figura 4"),
+            ParagraphBlock(index=2, text="", image_relationship_ids=("rFigure",)),
+            ParagraphBlock(index=3, text="Figura 5"),
+        ),
+        image_relationships={
+            "rFigure": ImageRelationship("rFigure", "media/figure.png", "word/media/figure.png"),
+        },
+        chart_relationships={},
+    )
+
+    result = ImageExtractor().extract_figures(parsed, output_dir=tmp_path / "figures")
+
+    assert result.figures[0].caption == "Figura 4"
+
+
 def test_section_extractor_skips_word_table_markup_around_figures() -> None:
     parsed = ParsedDocument(
         path=Path("article.docx"),
