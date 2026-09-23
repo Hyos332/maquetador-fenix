@@ -17,6 +17,10 @@ body {
   min-height: 100vh;
 }
 
+body.modal-open {
+  overflow: hidden;
+}
+
 button,
 a {
   font: inherit;
@@ -164,6 +168,11 @@ a {
   min-height: 34px;
   padding: 0 11px;
   font-size: 14px;
+}
+
+.button--icon {
+  width: 40px;
+  padding: 0;
 }
 
 .progress-panel,
@@ -443,15 +452,12 @@ a {
   font-size: 13px;
 }
 
-.preview-compare {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
-  margin-top: 18px;
-}
-
 .preview-pane {
   min-width: 0;
+}
+
+.preview-pane--single {
+  margin-top: 18px;
 }
 
 .preview-pane h3 {
@@ -466,6 +472,66 @@ a {
   border: 1px solid #d9dee7;
   border-radius: 8px;
   background: #ffffff;
+}
+
+.compare-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  padding: 22px;
+}
+
+.compare-modal__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.58);
+}
+
+.compare-modal__panel {
+  position: relative;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 14px;
+  width: min(1680px, 100%);
+  height: min(920px, calc(100vh - 44px));
+  margin: auto;
+  padding: 18px;
+  border: 1px solid #d9dee7;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.28);
+}
+
+.compare-modal__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.compare-modal__header h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.compare-modal__header p {
+  margin-top: 5px;
+  max-width: 980px;
+  color: #596171;
+  font-size: 14px;
+}
+
+.compare-modal__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  min-height: 0;
+}
+
+.preview--modal {
+  height: 100%;
+  min-height: 0;
 }
 
 @keyframes spin {
@@ -487,11 +553,25 @@ a {
     min-height: 500px;
   }
 
-  .preview-compare {
-    grid-template-columns: 1fr;
-  }
-
   .preview {
     height: 560px;
+  }
+
+  .compare-modal {
+    padding: 10px;
+  }
+
+  .compare-modal__panel {
+    height: calc(100vh - 20px);
+    padding: 12px;
+  }
+
+  .compare-modal__grid {
+    grid-template-columns: 1fr;
+    overflow: auto;
+  }
+
+  .preview--modal {
+    height: 520px;
   }
 }

@@ -1,4 +1,4 @@
-import { Download, FileText, FolderOpen, Send, Sparkles } from "lucide-react";
+import { Download, FileText, FolderOpen, Send, Sparkles, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { resolveApiUrl, updateAbstracts } from "../services/api";
 import type { CreateJobResponse, JobStatusResponse } from "../types/pipeline";
@@ -13,12 +13,31 @@ export function ResultPanel({ job, onReviewStarted }: ResultPanelProps) {
   const [abstractEn, setAbstractEn] = useState("");
   const [savingReview, setSavingReview] = useState(false);
   const [reviewError, setReviewError] = useState<string | null>(null);
+  const [compareOpen, setCompareOpen] = useState(false);
 
   useEffect(() => {
     setAbstractEs(job?.abstract_es ?? "");
     setAbstractEn(job?.abstract_en ?? "");
     setReviewError(null);
+    setCompareOpen(false);
   }, [job?.job_id, job?.abstract_es, job?.abstract_en]);
+
+  useEffect(() => {
+    if (!compareOpen) return;
+
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setCompareOpen(false);
+      }
+    }
+
+    document.body.classList.add("modal-open");
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.body.classList.remove("modal-open");
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [compareOpen]);
 
   if (!job) {
     return (
@@ -181,23 +200,50 @@ export function ResultPanel({ job, onReviewStarted }: ResultPanelProps) {
             Descargar carpeta completa
           </a>
         ) : null}
+        {htmlUrl && sourcePreviewUrl ? (
+          <button className="button button--secondary" type="button" onClick={() => setCompareOpen(true)}>
+            <FileText size={17} />
+            Comparar documento original
+          </button>
+        ) : null}
       </div>
 
-      {htmlUrl || sourcePreviewUrl ? (
-        <div className="preview-compare">
-          {htmlUrl ? (
-            <section className="preview-pane">
-              <h3>HTML generado</h3>
-              <iframe className="preview" title="Vista previa HTML generado" src={htmlUrl} />
-            </section>
-          ) : null}
+      {htmlUrl ? (
+        <section className="preview-pane preview-pane--single">
+          <h3>HTML generado</h3>
+          <iframe className="preview" title="Vista previa HTML generado" src={htmlUrl} />
+        </section>
+      ) : null}
 
-          {sourcePreviewUrl ? (
-            <section className="preview-pane">
-              <h3>DOCX original</h3>
-              <iframe className="preview" title="Vista previa DOCX original" src={sourcePreviewUrl} />
-            </section>
-          ) : null}
+      {compareOpen && htmlUrl && sourcePreviewUrl ? (
+        <div className="compare-modal" role="dialog" aria-modal="true" aria-labelledby="compare-title">
+          <div className="compare-modal__backdrop" onClick={() => setCompareOpen(false)} />
+          <div className="compare-modal__panel">
+            <header className="compare-modal__header">
+              <div>
+                <h2 id="compare-title">Comparar documento original</h2>
+                <p>{job.article_title ?? "Artículo maquetado"}</p>
+              </div>
+              <button
+                className="button button--secondary button--icon"
+                type="button"
+                aria-label="Cerrar comparación"
+                onClick={() => setCompareOpen(false)}
+              >
+                <X size={18} />
+              </button>
+            </header>
+            <div className="compare-modal__grid">
+              <section className="preview-pane">
+                <h3>HTML generado</h3>
+                <iframe className="preview preview--modal" title="Vista previa HTML generado" src={htmlUrl} />
+              </section>
+              <section className="preview-pane">
+                <h3>DOCX original</h3>
+                <iframe className="preview preview--modal" title="Vista previa DOCX original" src={sourcePreviewUrl} />
+              </section>
+            </div>
+          </div>
         </div>
       ) : null}
     </section>
