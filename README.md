@@ -44,6 +44,14 @@ docker compose restart
 docker compose down
 ```
 
+IA local opcional, sin instalar Ollama en el sistema operativo:
+
+```bash
+MLS_AI_REVIEW_ENABLED=true docker compose --profile ai up -d --build
+```
+
+Ese perfil levanta un contenedor `ollama` y descarga el modelo configurado en `MLS_AI_REVIEW_MODEL` dentro del volumen Docker `ollama-data`. La primera vez puede tardar porque baja el modelo; después queda guardado. Sin ese perfil, la IA queda apagada y el maquetador funciona normal.
+
 Por defecto el contenedor arranca con:
 
 ```yaml

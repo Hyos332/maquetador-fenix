@@ -15,6 +15,39 @@ services:
       MLS_DRY_RUN: "true"
       MLS_PLAYWRIGHT_HEADLESS: "true"
       MLS_MAX_ZIP_SIZE_MB: "100"
+      MLS_AI_REVIEW_ENABLED: "${MLS_AI_REVIEW_ENABLED:-false}"
+      MLS_AI_REVIEW_ENDPOINT: "${MLS_AI_REVIEW_ENDPOINT:-http://ollama:11434/api/generate}"
+      MLS_AI_REVIEW_MODEL: "${MLS_AI_REVIEW_MODEL:-llama3.2:3b}"
+      MLS_AI_REVIEW_TIMEOUT_SECONDS: "${MLS_AI_REVIEW_TIMEOUT_SECONDS:-20}"
     volumes:
       - ./workspaces:/data/workspaces
       - ./deliveries:/data/deliveries
+
+  ollama:
+    image: ollama/ollama:latest
+    profiles:
+      - ai
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+
+  ollama-model:
+    image: curlimages/curl:8.16.0
+    profiles:
+      - ai
+    depends_on:
+      - ollama
+    restart: "no"
+    command:
+      - sh
+      - -c
+      - |
+        until curl -fsS http://ollama:11434/api/tags >/dev/null; do sleep 2; done
+        curl -fsS http://ollama:11434/api/pull \
+          -H 'Content-Type: application/json' \
+          -d '{"name":"'"${MLS_AI_REVIEW_MODEL:-llama3.2:3b}"'"}'
+
+volumes:
+  ollama-data:

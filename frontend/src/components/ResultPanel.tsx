@@ -1,4 +1,4 @@
-import { Download, FileText, FolderOpen, Send } from "lucide-react";
+import { Download, FileText, FolderOpen, Send, Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
 import { resolveApiUrl, updateAbstracts } from "../services/api";
 import type { CreateJobResponse, JobStatusResponse } from "../types/pipeline";
@@ -34,6 +34,7 @@ export function ResultPanel({ job, onReviewStarted }: ResultPanelProps) {
   const deliveryArchiveUrl = job.delivery_archive_url ? resolveApiUrl(job.delivery_archive_url) : null;
   const jobId = job.job_id;
   const abstractReview = getAbstractReviewState(job, abstractEs, abstractEn);
+  const regularWarnings = job.warnings.filter((warning) => !warning.startsWith("AI: "));
 
   async function submitAbstractReview() {
     if (!abstractReview.shouldShow || abstractReview.hasOverLimit) return;
@@ -75,11 +76,23 @@ export function ResultPanel({ job, onReviewStarted }: ResultPanelProps) {
         </div>
       </dl>
 
-      {job.warnings.length ? (
+      {regularWarnings.length ? (
         <div className="warnings">
           <h3>Revisión necesaria</h3>
-          {job.warnings.map((warning) => (
+          {regularWarnings.map((warning) => (
             <p key={warning}>{warning}</p>
+          ))}
+        </div>
+      ) : null}
+
+      {job.ai_suggestions.length ? (
+        <div className="ai-review">
+          <div className="ai-review__header">
+            <Sparkles size={18} />
+            <h3>Revisión IA local</h3>
+          </div>
+          {job.ai_suggestions.map((suggestion) => (
+            <p key={suggestion}>{suggestion}</p>
           ))}
         </div>
       ) : null}
@@ -102,6 +115,16 @@ export function ResultPanel({ job, onReviewStarted }: ResultPanelProps) {
                 </strong>
               </span>
               <textarea value={abstractEs} onChange={(event) => setAbstractEs(event.target.value)} />
+              {job.suggested_abstract_es ? (
+                <button
+                  className="button button--secondary button--compact"
+                  type="button"
+                  onClick={() => setAbstractEs(job.suggested_abstract_es ?? "")}
+                >
+                  <Sparkles size={15} />
+                  Usar sugerencia IA
+                </button>
+              ) : null}
             </label>
           ) : null}
 
@@ -114,6 +137,16 @@ export function ResultPanel({ job, onReviewStarted }: ResultPanelProps) {
                 </strong>
               </span>
               <textarea value={abstractEn} onChange={(event) => setAbstractEn(event.target.value)} />
+              {job.suggested_abstract_en ? (
+                <button
+                  className="button button--secondary button--compact"
+                  type="button"
+                  onClick={() => setAbstractEn(job.suggested_abstract_en ?? "")}
+                >
+                  <Sparkles size={15} />
+                  Usar sugerencia IA
+                </button>
+              ) : null}
             </label>
           ) : null}
 

@@ -54,3 +54,6 @@ class PipelineResult(BaseModel):
     epub_path: Path | None = None
     delivery_dir: Path | None = None
     delivery_zip: Path | None = None
+    ai_suggestions: list[str] = Field(default_factory=list)
+    suggested_abstract_es: str | None = None
+    suggested_abstract_en: str | None = None

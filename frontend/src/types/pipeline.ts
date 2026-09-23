@@ -32,6 +32,9 @@ export interface JobStatusResponse {
   abstract_es_word_count: number | null;
   abstract_en_word_count: number | null;
   abstract_word_limit: number;
+  ai_suggestions: string[];
+  suggested_abstract_es: string | null;
+  suggested_abstract_en: string | null;
   html_url: string | null;
   source_preview_url: string | null;
   epub_url: string | null;

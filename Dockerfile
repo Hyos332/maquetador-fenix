@@ -25,10 +25,13 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app/backend
-COPY backend/ ./
+COPY backend/pyproject.toml ./
 RUN python -m pip install --upgrade pip \
-    && python -m pip install --no-cache-dir . \
+    && python -c "import pathlib, subprocess, sys, tomllib; deps = tomllib.loads(pathlib.Path('pyproject.toml').read_text(encoding='utf-8'))['project']['dependencies']; subprocess.check_call([sys.executable, '-m', 'pip', 'install', '--no-cache-dir', *deps])" \
     && python -m playwright install --with-deps chromium
+
+COPY backend/ ./
+RUN python -m pip install --no-cache-dir --no-deps .
 
 COPY --from=frontend-builder /app/frontend/dist /app/backend/static
 

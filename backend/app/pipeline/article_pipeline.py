@@ -13,6 +13,7 @@ from app.services.docx_parser import DocxParser
 from app.services.epub_builder import EpubBuilder
 from app.services.html_processor import HtmlProcessor
 from app.services.html_renderer import IntermediateHtmlRenderer
+from app.services.ai_reviewer import AiReviewResult, LocalAiReviewer
 from app.services.image_extractor import ImageExtractor
 from app.services.journal_config import JournalConfigService
 from app.services.metadata_extractor import MetadataExtractor
@@ -42,6 +43,12 @@ class ArticlePipeline:
         self.epub_builder = EpubBuilder()
         self.validator = Validator()
         self.delivery_service = DeliveryService(self.settings.deliveries_dir)
+        self.ai_reviewer = LocalAiReviewer(
+            enabled=self.settings.ai_review_enabled,
+            endpoint=self.settings.ai_review_endpoint,
+            model=self.settings.ai_review_model,
+            timeout_seconds=self.settings.ai_review_timeout_seconds,
+        )
 
     def run(
         self,
@@ -111,6 +118,12 @@ class ArticlePipeline:
             warnings.extend(errors)
         warnings = list(dict.fromkeys(warnings))
 
+        ai_review = AiReviewResult()
+        if not errors:
+            ai_review = self.ai_reviewer.review(article, final_html, warnings)
+            warnings.extend(f"AI: {suggestion}" for suggestion in ai_review.suggestions)
+            warnings = list(dict.fromkeys(warnings))
+
         delivery_dir = None
         delivery_zip = None
         if not errors:
@@ -136,6 +149,9 @@ class ArticlePipeline:
             epub_path=epub_path,
             delivery_dir=delivery_dir,
             delivery_zip=delivery_zip,
+            ai_suggestions=ai_review.suggestions,
+            suggested_abstract_es=ai_review.suggested_abstract_es,
+            suggested_abstract_en=ai_review.suggested_abstract_en,
         )
 
     def _abstract_warnings(self, value: str | None, label: str) -> list[str]:

@@ -14,6 +14,10 @@ class Settings(BaseModel):
     playwright_headless: bool = False
     dry_run: bool = True
     max_zip_size_mb: int = 100
+    ai_review_enabled: bool = False
+    ai_review_endpoint: str = "http://localhost:11434/api/generate"
+    ai_review_model: str = "llama3.2:3b"
+    ai_review_timeout_seconds: int = 20
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -44,6 +48,24 @@ class Settings(BaseModel):
                 os.getenv(
                     "MLS_MAX_ZIP_SIZE_MB",
                     str(cls.model_fields["max_zip_size_mb"].default),
+                )
+            ),
+            ai_review_enabled=_env_bool(
+                "MLS_AI_REVIEW_ENABLED",
+                cls.model_fields["ai_review_enabled"].default,
+            ),
+            ai_review_endpoint=os.getenv(
+                "MLS_AI_REVIEW_ENDPOINT",
+                cls.model_fields["ai_review_endpoint"].default,
+            ),
+            ai_review_model=os.getenv(
+                "MLS_AI_REVIEW_MODEL",
+                cls.model_fields["ai_review_model"].default,
+            ),
+            ai_review_timeout_seconds=int(
+                os.getenv(
+                    "MLS_AI_REVIEW_TIMEOUT_SECONDS",
+                    str(cls.model_fields["ai_review_timeout_seconds"].default),
                 )
             ),
         )

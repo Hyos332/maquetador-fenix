@@ -58,6 +58,9 @@ class JobStatusResponse(BaseModel):
     abstract_es_word_count: int | None = None
     abstract_en_word_count: int | None = None
     abstract_word_limit: int = 250
+    ai_suggestions: list[str] = []
+    suggested_abstract_es: str | None = None
+    suggested_abstract_en: str | None = None
     html_url: str | None = None
     source_preview_url: str | None = None
     epub_url: str | None = None
@@ -293,6 +296,9 @@ def _to_status_response(record: JobRecord) -> JobStatusResponse:
         abstract_en=article.abstract_en if article else None,
         abstract_es_word_count=word_count(article.abstract_es) if article else None,
         abstract_en_word_count=word_count(article.abstract_en) if article else None,
+        ai_suggestions=record.result.ai_suggestions if record.result else [],
+        suggested_abstract_es=record.result.suggested_abstract_es if record.result else None,
+        suggested_abstract_en=record.result.suggested_abstract_en if record.result else None,
         html_url=html_url,
         source_preview_url=source_preview_url,
         epub_url=epub_url,

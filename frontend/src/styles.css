@@ -159,6 +159,13 @@ a {
   color: #20242a;
 }
 
+.button--compact {
+  justify-self: start;
+  min-height: 34px;
+  padding: 0 11px;
+  font-size: 14px;
+}
+
 .progress-panel,
 .message-panel {
   padding: 18px;
@@ -319,6 +326,28 @@ a {
   margin: 0;
   font-size: 14px;
   color: #815b00;
+}
+
+.ai-review {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 18px;
+  padding: 14px;
+  border: 1px solid #9ccdc5;
+  border-radius: 8px;
+  background: #f1faf8;
+}
+
+.ai-review__header {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  color: #17665d;
+}
+
+.ai-review h3 {
+  margin: 0;
+  font-size: 14px;
 }
 
 .abstract-review {
