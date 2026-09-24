@@ -11,6 +11,7 @@ interface ResultPanelProps {
 interface DiffPart {
   text: string;
   removed: boolean;
+  reason?: string;
 }
 
 interface SuggestionDiff {
@@ -18,6 +19,12 @@ interface SuggestionDiff {
   originalParts: DiffPart[];
   revised: string;
   removedCount: number;
+}
+
+interface RemovalTooltip {
+  text: string;
+  left: number;
+  top: number;
 }
 
 export function ResultPanel({ job, onReviewStarted }: ResultPanelProps) {
@@ -339,6 +346,24 @@ function isOutputReady(status: PipelineStatus) {
 }
 
 function SuggestionDiffPreview({ diff, onUndo }: { diff: SuggestionDiff; onUndo: () => void }) {
+  const [tooltip, setTooltip] = useState<RemovalTooltip | null>(null);
+
+  function showTooltip(reason: string | undefined, target: HTMLElement) {
+    if (!reason) return;
+
+    const rect = target.getBoundingClientRect();
+    const horizontalPadding = 180;
+    const left = Math.min(
+      Math.max(rect.left + rect.width / 2, horizontalPadding),
+      window.innerWidth - horizontalPadding,
+    );
+    setTooltip({
+      text: reason,
+      left,
+      top: Math.max(rect.top - 10, 12),
+    });
+  }
+
   return (
     <div className="suggestion-diff">
       <div className="suggestion-diff__header">
@@ -352,9 +377,32 @@ function SuggestionDiffPreview({ diff, onUndo }: { diff: SuggestionDiff; onUndo:
       </div>
       <p className="suggestion-diff__text">
         {diff.originalParts.map((part, index) =>
-          part.removed ? <mark key={index}>{part.text}</mark> : <span key={index}>{part.text}</span>,
+          part.removed ? (
+            <mark
+              key={index}
+              tabIndex={0}
+              aria-label={`${part.text}: ${part.reason}`}
+              onBlur={() => setTooltip(null)}
+              onFocus={(event) => showTooltip(part.reason, event.currentTarget)}
+              onMouseEnter={(event) => showTooltip(part.reason, event.currentTarget)}
+              onMouseLeave={() => setTooltip(null)}
+            >
+              {part.text}
+            </mark>
+          ) : (
+            <span key={index}>{part.text}</span>
+          ),
         )}
       </p>
+      {tooltip ? (
+        <div
+          className="suggestion-tooltip"
+          role="tooltip"
+          style={{ left: tooltip.left, top: tooltip.top }}
+        >
+          {tooltip.text}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -363,6 +411,7 @@ function buildSuggestionDiff(original: string, revised: string): SuggestionDiff 
   const originalTokens = tokenizeWordsWithPosition(original);
   const revisedTokens = tokenizeWords(revised);
   const keepIndexes = matchedOriginalIndexes(originalTokens, revisedTokens);
+  const revisedFrequency = tokenFrequency(revisedTokens);
   const originalParts: DiffPart[] = [];
   let cursor = 0;
   let removedCount = 0;
@@ -373,7 +422,11 @@ function buildSuggestionDiff(original: string, revised: string): SuggestionDiff 
     }
 
     const removed = !keepIndexes.has(index);
-    originalParts.push({ text: original.slice(token.start, token.end), removed });
+    originalParts.push({
+      text: original.slice(token.start, token.end),
+      removed,
+      reason: removed ? removalReason(token.normalized, revisedFrequency) : undefined,
+    });
     if (removed) {
       removedCount += 1;
     }
@@ -385,6 +438,26 @@ function buildSuggestionDiff(original: string, revised: string): SuggestionDiff 
   }
 
   return { original, originalParts, revised, removedCount };
+}
+
+function removalReason(normalizedToken: string, revisedFrequency: Map<string, number>) {
+  if (revisedFrequency.has(normalizedToken)) {
+    return "Se retiró porque esa idea o palabra ya queda mencionada en el resumen.";
+  }
+
+  if (LOW_IMPACT_WORDS.has(normalizedToken)) {
+    return "Se retiró porque aporta poco al sentido central y ayuda a bajar el resumen al límite.";
+  }
+
+  return "Se retiró para cumplir el máximo de palabras sin cambiar la intención del texto.";
+}
+
+function tokenFrequency(tokens: Array<{ normalized: string }>) {
+  const frequency = new Map<string, number>();
+  tokens.forEach((token) => {
+    frequency.set(token.normalized, (frequency.get(token.normalized) ?? 0) + 1);
+  });
+  return frequency;
 }
 
 function matchedOriginalIndexes(
@@ -430,6 +503,47 @@ function normalizeToken(value: string) {
     .replace(/\p{Diacritic}/gu, "")
     .toLocaleLowerCase();
 }
+
+const LOW_IMPACT_WORDS = new Set([
+  "a",
+  "al",
+  "algo",
+  "ante",
+  "asi",
+  "como",
+  "con",
+  "de",
+  "del",
+  "desde",
+  "donde",
+  "durante",
+  "el",
+  "ella",
+  "ello",
+  "en",
+  "entre",
+  "es",
+  "esa",
+  "ese",
+  "esta",
+  "este",
+  "estos",
+  "las",
+  "lo",
+  "los",
+  "mas",
+  "muy",
+  "para",
+  "por",
+  "que",
+  "se",
+  "sin",
+  "su",
+  "sus",
+  "un",
+  "una",
+  "y",
+]);
 
 function hasAbstractWarning(warnings: string[], label: "Resumen" | "Abstract") {
   return warnings.some((warning) => warning.startsWith(`${label} has`) && warning.includes("250"));

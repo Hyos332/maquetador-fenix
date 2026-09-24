@@ -1,0 +1,78 @@
+.progress-panel,
+.message-panel {
+  padding: 18px;
+}
+
+.progress-panel h2,
+.message-panel h2,
+.result-panel h2 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.progress-list {
+  display: grid;
+  gap: 10px;
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.progress-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 34px;
+  color: #687182;
+}
+
+.progress-item__icon {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1px solid #c7cfdb;
+}
+
+.progress-item--done {
+  color: #1e6e4f;
+}
+
+.progress-item--done .progress-item__icon {
+  color: #ffffff;
+  background: #1e6e4f;
+  border-color: #1e6e4f;
+}
+
+.progress-item--active {
+  color: #8a3f2d;
+}
+
+.progress-item--active .progress-item__icon {
+  color: #8a3f2d;
+  border-color: #d9937f;
+  background: #fff1ec;
+}
+
+.progress-item--failed .progress-item__icon {
+  color: #ffffff;
+  background: #b42318;
+  border-color: #b42318;
+}
+
+.progress-item--review .progress-item__icon {
+  color: #815b00;
+  background: #fff5d6;
+  border-color: #e4bd4a;
+}
+
+.spin {
+  animation: spin 900ms linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

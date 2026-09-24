@@ -1,0 +1,70 @@
+.dropzone {
+  display: grid;
+  gap: 18px;
+  min-height: 300px;
+  padding: 24px;
+  border-style: dashed;
+}
+
+.dropzone--active {
+  border-color: #227c70;
+  background: #f1faf8;
+}
+
+.brand-lockup {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 14px;
+  align-items: center;
+}
+
+.phoenix-mark {
+  width: 72px;
+  height: 72px;
+  padding: 7px;
+  border: 1px solid #ffd08a;
+  border-radius: 8px;
+  background: #fff8eb;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.78);
+}
+
+.brand-eyebrow {
+  display: block;
+  margin-bottom: 5px;
+  color: #a84413;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.dropzone h1 {
+  margin: 0 0 8px;
+  font-size: 26px;
+  line-height: 1.12;
+}
+
+.dropzone p,
+.message-panel p,
+.result-panel p {
+  margin: 0;
+  color: #596171;
+}
+
+.selected-file {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  min-height: 42px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: #eef2f7;
+  color: #20242a;
+}
+
+.dropzone__actions,
+.result-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
