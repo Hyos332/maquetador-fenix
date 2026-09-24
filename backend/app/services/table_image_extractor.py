@@ -148,8 +148,6 @@ class TableImageExtractor:
         page.screenshot(path=str(output_path), clip=clip)
 
     def _convert_docx_to_html(self, docx_path: Path, output_dir: Path) -> Path:
-        ensure_within_directory(output_dir, docx_path)
-        
         result = subprocess.run(
             [
                 "libreoffice",
