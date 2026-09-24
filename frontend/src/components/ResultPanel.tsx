@@ -1,7 +1,7 @@
 import { Download, FileText, FolderOpen, Send, Sparkles, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { resolveApiUrl, updateAbstracts } from "../services/api";
-import type { CreateJobResponse, JobStatusResponse } from "../types/pipeline";
+import type { CreateJobResponse, JobStatusResponse, PipelineStatus } from "../types/pipeline";
 
 interface ResultPanelProps {
   job: JobStatusResponse | null;
@@ -14,12 +14,16 @@ export function ResultPanel({ job, onReviewStarted }: ResultPanelProps) {
   const [savingReview, setSavingReview] = useState(false);
   const [reviewError, setReviewError] = useState<string | null>(null);
   const [compareOpen, setCompareOpen] = useState(false);
+  const [removedAbstractEs, setRemovedAbstractEs] = useState<string[]>([]);
+  const [removedAbstractEn, setRemovedAbstractEn] = useState<string[]>([]);
 
   useEffect(() => {
     setAbstractEs(job?.abstract_es ?? "");
     setAbstractEn(job?.abstract_en ?? "");
     setReviewError(null);
     setCompareOpen(false);
+    setRemovedAbstractEs([]);
+    setRemovedAbstractEn([]);
   }, [job?.job_id, job?.abstract_es, job?.abstract_en]);
 
   useEffect(() => {
@@ -54,6 +58,7 @@ export function ResultPanel({ job, onReviewStarted }: ResultPanelProps) {
   const jobId = job.job_id;
   const abstractReview = getAbstractReviewState(job, abstractEs, abstractEn);
   const regularWarnings = job.warnings.filter((warning) => !warning.startsWith("AI: "));
+  const outputsReady = isOutputReady(job.status);
 
   async function submitAbstractReview() {
     if (!abstractReview.shouldShow || abstractReview.hasOverLimit) return;
@@ -138,12 +143,17 @@ export function ResultPanel({ job, onReviewStarted }: ResultPanelProps) {
                 <button
                   className="button button--secondary button--compact"
                   type="button"
-                  onClick={() => setAbstractEs(job.suggested_abstract_es ?? "")}
+                  onClick={() => {
+                    const suggestion = job.suggested_abstract_es ?? "";
+                    setRemovedAbstractEs(removedWordGroups(abstractEs, suggestion));
+                    setAbstractEs(suggestion);
+                  }}
                 >
                   <Sparkles size={15} />
                   Usar sugerencia IA
                 </button>
               ) : null}
+              {removedAbstractEs.length ? <RemovedWordsPreview groups={removedAbstractEs} /> : null}
             </label>
           ) : null}
 
@@ -160,12 +170,17 @@ export function ResultPanel({ job, onReviewStarted }: ResultPanelProps) {
                 <button
                   className="button button--secondary button--compact"
                   type="button"
-                  onClick={() => setAbstractEn(job.suggested_abstract_en ?? "")}
+                  onClick={() => {
+                    const suggestion = job.suggested_abstract_en ?? "";
+                    setRemovedAbstractEn(removedWordGroups(abstractEn, suggestion));
+                    setAbstractEn(suggestion);
+                  }}
                 >
                   <Sparkles size={15} />
                   Usar sugerencia IA
                 </button>
               ) : null}
+              {removedAbstractEn.length ? <RemovedWordsPreview groups={removedAbstractEn} /> : null}
             </label>
           ) : null}
 
@@ -195,10 +210,17 @@ export function ResultPanel({ job, onReviewStarted }: ResultPanelProps) {
 
       <div className="result-actions">
         {deliveryArchiveUrl ? (
-          <a className="button button--primary" href={deliveryArchiveUrl}>
-            <Download size={17} />
-            Descargar carpeta completa
-          </a>
+          outputsReady ? (
+            <a className="button button--primary" href={deliveryArchiveUrl}>
+              <Download size={17} />
+              Descargar carpeta completa
+            </a>
+          ) : (
+            <button className="button button--primary" type="button" disabled>
+              <Download size={17} />
+              Generando carpeta
+            </button>
+          )
         ) : null}
         {htmlUrl && sourcePreviewUrl ? (
           <button className="button button--secondary" type="button" onClick={() => setCompareOpen(true)}>
@@ -282,6 +304,83 @@ function getAbstractReviewState(job: JobStatusResponse, abstractEs: string, abst
     enCount,
     hasOverLimit: (showEs && esCount > limit) || (showEn && enCount > limit),
   };
+}
+
+function isOutputReady(status: PipelineStatus) {
+  return status === "COMPLETED" || status === "NEEDS_REVIEW";
+}
+
+function RemovedWordsPreview({ groups }: { groups: string[] }) {
+  return (
+    <div className="removed-words">
+      <p>Texto retirado por la sugerencia</p>
+      <div>
+        {groups.map((group, index) => (
+          <mark key={`${group}-${index}`}>{group}</mark>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function removedWordGroups(original: string, revised: string) {
+  const originalTokens = tokenizeWords(original);
+  const revisedTokens = tokenizeWords(revised);
+  const keepIndexes = matchedOriginalIndexes(originalTokens, revisedTokens);
+  const groups: string[] = [];
+  let current: string[] = [];
+
+  originalTokens.forEach((token, index) => {
+    if (keepIndexes.has(index)) {
+      if (current.length) {
+        groups.push(current.join(" "));
+        current = [];
+      }
+      return;
+    }
+    current.push(token.text);
+  });
+
+  if (current.length) {
+    groups.push(current.join(" "));
+  }
+
+  return groups.filter(Boolean).slice(0, 24);
+}
+
+function matchedOriginalIndexes(
+  originalTokens: Array<{ text: string; normalized: string }>,
+  revisedTokens: Array<{ normalized: string }>,
+) {
+  const matched = new Set<number>();
+  let searchFrom = 0;
+
+  for (const revisedToken of revisedTokens) {
+    for (let index = searchFrom; index < originalTokens.length; index += 1) {
+      if (originalTokens[index].normalized !== revisedToken.normalized) {
+        continue;
+      }
+      matched.add(index);
+      searchFrom = index + 1;
+      break;
+    }
+  }
+
+  return matched;
+}
+
+function tokenizeWords(value: string) {
+  return Array.from(value.matchAll(/[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu)).map((match) => ({
+    text: match[0],
+    normalized: normalizeToken(match[0]),
+  }));
+}
+
+function normalizeToken(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLocaleLowerCase();
 }
 
 function hasAbstractWarning(warnings: string[], label: "Resumen" | "Abstract") {
