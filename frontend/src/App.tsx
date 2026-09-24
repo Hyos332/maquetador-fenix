@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { Dropzone } from "./components/Dropzone";
 import { ProgressList } from "./components/ProgressList";
 import { ResultPanel } from "./components/ResultPanel";
@@ -15,6 +15,9 @@ export default function App() {
   const [status, setStatus] = useState<PipelineStatus>("PENDING");
   const [message, setMessage] = useState("Esperando documento.");
   const [error, setError] = useState<string | null>(null);
+  
+  const pollingIntervalRef = useRef<number>(1400);
+  const consecutiveErrorsRef = useRef<number>(0);
 
   const busy = useMemo(() => {
     return Boolean(jobId && !terminalStatuses.includes(status));
@@ -23,19 +26,50 @@ export default function App() {
   useEffect(() => {
     if (!jobId || terminalStatuses.includes(status)) return;
 
-    const timer = window.setInterval(async () => {
-      try {
-        const nextJob = await getJob(jobId);
-        setJob(nextJob);
-        setStatus(nextJob.status);
-        setMessage(nextJob.message);
-        setError(nextJob.error);
-      } catch (pollError) {
-        setError(pollError instanceof Error ? pollError.message : "No se pudo consultar el trabajo.");
-      }
-    }, 1400);
+    pollingIntervalRef.current = 1400;
+    consecutiveErrorsRef.current = 0;
 
-    return () => window.clearInterval(timer);
+    const scheduleNextPoll = () => {
+      const timer = window.setTimeout(async () => {
+        try {
+          const nextJob = await getJob(jobId);
+          setJob(nextJob);
+          setStatus(nextJob.status);
+          setMessage(nextJob.message);
+          setError(nextJob.error);
+          
+          consecutiveErrorsRef.current = 0;
+          pollingIntervalRef.current = 1400;
+          
+          if (!terminalStatuses.includes(nextJob.status)) {
+            scheduleNextPoll();
+          }
+        } catch (pollError) {
+          consecutiveErrorsRef.current += 1;
+          
+          if (consecutiveErrorsRef.current >= 5) {
+            setError("No se puede conectar con el servidor. Intenta recargar la página.");
+            return;
+          }
+          
+          pollingIntervalRef.current = Math.min(pollingIntervalRef.current * 1.5, 10000);
+          
+          if (!terminalStatuses.includes(status)) {
+            scheduleNextPoll();
+          }
+        }
+      }, pollingIntervalRef.current);
+
+      return timer;
+    };
+
+    const timer = scheduleNextPoll();
+
+    return () => {
+      if (timer !== undefined) {
+        window.clearTimeout(timer);
+      }
+    };
   }, [jobId, status]);
 
   async function startJob() {

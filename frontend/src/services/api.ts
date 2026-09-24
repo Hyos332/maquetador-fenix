@@ -14,14 +14,29 @@ export function resolveApiUrl(path: string): string {
   return `${API_BASE_URL}${path}`;
 }
 
+async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs: number = 30000): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+    return response;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 export async function uploadArticleZip(file: File): Promise<CreateJobResponse> {
   const data = new FormData();
   data.append("file", file);
 
-  const response = await fetch(resolveApiUrl("/api/jobs"), {
+  const response = await fetchWithTimeout(resolveApiUrl("/api/jobs"), {
     method: "POST",
     body: data,
-  });
+  }, 60000);
 
   if (!response.ok) {
     throw new Error(await readApiError(response));
@@ -31,7 +46,7 @@ export async function uploadArticleZip(file: File): Promise<CreateJobResponse> {
 }
 
 export async function getJob(jobId: string): Promise<JobStatusResponse> {
-  const response = await fetch(resolveApiUrl(`/api/jobs/${jobId}`));
+  const response = await fetchWithTimeout(resolveApiUrl(`/api/jobs/${jobId}`));
   if (!response.ok) {
     throw new Error(await readApiError(response));
   }
@@ -39,7 +54,7 @@ export async function getJob(jobId: string): Promise<JobStatusResponse> {
 }
 
 export async function updateAbstracts(jobId: string, payload: AbstractReviewPayload): Promise<CreateJobResponse> {
-  const response = await fetch(resolveApiUrl(`/api/jobs/${jobId}/abstracts`), {
+  const response = await fetchWithTimeout(resolveApiUrl(`/api/jobs/${jobId}/abstracts`), {
     method: "PATCH",
     headers: {
       "Content-Type": "application/json",

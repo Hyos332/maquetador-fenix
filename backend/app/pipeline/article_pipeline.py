@@ -4,6 +4,7 @@ import shutil
 from collections.abc import Callable
 from pathlib import Path
 from urllib.error import URLError
+from urllib.parse import urlparse
 from urllib.request import urlopen
 
 from app.config.settings import Settings, settings
@@ -208,10 +209,24 @@ class ArticlePipeline:
 
         if journal.logo_source_url:
             try:
+                parsed_url = urlparse(journal.logo_source_url)
+                
+                if parsed_url.scheme != "https":
+                    raise ValueError("Only HTTPS URLs are allowed for logo downloads")
+                
+                allowed_domains = [
+                    "mlsjournals.com",
+                    "www.mlsjournals.com"
+                ]
+                
+                if not any(parsed_url.netloc == domain or parsed_url.netloc.endswith(f".{domain}") 
+                          for domain in allowed_domains):
+                    raise ValueError(f"Domain {parsed_url.netloc} is not in the allowed list")
+                
                 with urlopen(journal.logo_source_url, timeout=8) as response:
                     output_path.write_bytes(response.read())
                     return
-            except (OSError, URLError, TimeoutError):
+            except (OSError, URLError, TimeoutError, ValueError):
                 pass
 
         output_path.write_text(_default_logo_svg(journal.name), encoding="utf-8")

@@ -14,9 +14,29 @@ export function Dropzone({ file, disabled, onFileSelected, onSubmit }: DropzoneP
 
   function handleFiles(files: FileList | null) {
     const selected = files?.[0];
-    if (selected) {
-      onFileSelected(selected);
+    if (!selected) return;
+    
+    const allowedTypes = [
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/zip'
+    ];
+    const allowedExtensions = ['.docx', '.zip'];
+    
+    const hasValidType = allowedTypes.includes(selected.type);
+    const hasValidExtension = allowedExtensions.some(ext => selected.name.toLowerCase().endsWith(ext));
+    
+    if (!hasValidType && !hasValidExtension) {
+      alert('Solo se permiten archivos .docx o .zip');
+      return;
     }
+    
+    const maxSize = 100 * 1024 * 1024;
+    if (selected.size > maxSize) {
+      alert('El archivo no puede superar 100MB');
+      return;
+    }
+    
+    onFileSelected(selected);
   }
 
   return (

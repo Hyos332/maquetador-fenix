@@ -62,6 +62,7 @@ class MlsPage:
         self.base_url = base_url
         self.timeout_ms = timeout_ms
         self.language = "Español"
+        self._context = None
 
     @classmethod
     def create(
@@ -75,7 +76,9 @@ class MlsPage:
         page = context.new_page()
         page.set_default_timeout(timeout_ms)
         downloads_dir.mkdir(parents=True, exist_ok=True)
-        return cls(page=page, base_url=base_url, timeout_ms=timeout_ms)
+        instance = cls(page=page, base_url=base_url, timeout_ms=timeout_ms)
+        instance._context = context
+        return instance
 
     def open(self) -> None:
         self.page.goto(self.base_url, wait_until="networkidle")

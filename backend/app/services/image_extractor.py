@@ -12,7 +12,7 @@ from PIL import Image
 
 from app.models.article import Figure
 from app.services.docx_parser import DocumentBlock, ParagraphBlock, ParsedDocument, TableBlock
-from app.utils.files import ensure_directory
+from app.utils.files import ensure_directory, ensure_within_directory
 from app.utils.strings import clean_word_text, normalize_for_match
 
 
@@ -271,6 +271,8 @@ class ImageExtractor:
             temp_path = Path(temp_dir)
             input_path = temp_path / f"source{suffix}"
             input_path.write_bytes(data)
+            
+            ensure_within_directory(temp_path, input_path)
 
             subprocess.run(
                 [
@@ -288,6 +290,7 @@ class ImageExtractor:
             )
 
             converted_path = temp_path / "source.png"
+            ensure_within_directory(temp_path, converted_path)
             if not converted_path.exists():
                 raise OSError("libreoffice did not create a PNG file.")
 
@@ -319,11 +322,12 @@ class ImageExtractor:
             for path in sorted(temp_path.iterdir(), key=lambda item: item.stat().st_mtime_ns):
                 if path.suffix.lower() not in {".gif", ".png", ".jpg", ".jpeg"}:
                     continue
-                image = Image.open(path)
-                width, height = image.size
-                if width < 300 or height < 200:
-                    continue
-                images.append(image.convert("RGBA"))
+                with Image.open(path) as image:
+                    width, height = image.size
+                    if width < 300 or height < 200:
+                        continue
+                   
+                    images.append(image.convert("RGBA").copy())
 
             return images
 

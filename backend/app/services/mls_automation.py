@@ -27,6 +27,8 @@ class MlsAutomationService:
                 mls_page.fill_article(article)
                 return mls_page.generate_and_download_html(output_path)
             finally:
+                if mls_page._context:
+                    mls_page._context.close()
                 browser.close()
 
 

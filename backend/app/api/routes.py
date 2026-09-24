@@ -16,7 +16,7 @@ from pydantic import BaseModel, ConfigDict
 from app.config.settings import Settings, settings as app_settings
 from app.models.pipeline import PipelineResult, PipelineStatus
 from app.pipeline.article_pipeline import ArticlePipeline
-from app.utils.files import ensure_directory, sanitize_filename
+from app.utils.files import ensure_directory, ensure_within_directory, sanitize_filename
 from app.utils.strings import word_count
 
 router = APIRouter(prefix="/api", tags=["jobs"])
@@ -204,6 +204,12 @@ def get_delivery_file(job_id: str, asset_name: str) -> FileResponse:
         raise HTTPException(status_code=404, detail="Entrega no disponible.")
 
     asset_path = record.result.delivery_dir / asset_name
+    
+    try:
+        ensure_within_directory(record.result.delivery_dir, asset_path)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Nombre de recurso inválido.")
+    
     if not asset_path.exists() or not asset_path.is_file():
         raise HTTPException(status_code=404, detail="Archivo no encontrado.")
 
@@ -220,6 +226,12 @@ def get_job_asset(job_id: str, asset_name: str) -> FileResponse:
         raise HTTPException(status_code=404, detail="Recurso no disponible.")
 
     asset_path = record.result.workspace.generated_dir / asset_name
+    
+    try:
+        ensure_within_directory(record.result.workspace.generated_dir, asset_path)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Nombre de recurso inválido.")
+    
     if not asset_path.exists() or not asset_path.is_file():
         raise HTTPException(status_code=404, detail="Recurso no encontrado.")
 
@@ -252,12 +264,15 @@ def _run_job(
             record.warnings = result.warnings
             record.result = result
             record.updated_at = datetime.now(UTC)
-    except Exception as exc:  # Intentional API boundary: convert expected/unexpected failures to job state.
+    except Exception as exc:
         with jobs_lock:
             record = jobs[job_id]
             record.status = PipelineStatus.FAILED
             record.message = "El trabajo falló."
-            record.error = str(exc)
+            error_message = str(exc)
+            if len(error_message) > 200:
+                error_message = error_message[:200] + "..."
+            record.error = error_message
             record.updated_at = datetime.now(UTC)
 
 
@@ -410,6 +425,8 @@ def _source_pdf_for_preview(record: JobRecord) -> Path | None:
         return expected_pdf
 
     try:
+        ensure_within_directory(preview_dir, source_docx)
+        
         result = subprocess.run(
             [
                 "libreoffice",
@@ -425,14 +442,18 @@ def _source_pdf_for_preview(record: JobRecord) -> Path | None:
             text=True,
             timeout=60,
         )
-    except (OSError, subprocess.SubprocessError):
+    except (OSError, subprocess.SubprocessError, ValueError):
         return None
 
     if result.returncode != 0:
         return None
 
     if expected_pdf.exists():
+        ensure_within_directory(preview_dir, expected_pdf)
         return expected_pdf
 
     pdf_files = sorted(preview_dir.glob("*.pdf"), key=lambda path: path.stat().st_mtime, reverse=True)
-    return pdf_files[0] if pdf_files else None
+    if pdf_files:
+        ensure_within_directory(preview_dir, pdf_files[0])
+        return pdf_files[0]
+    return None

@@ -211,7 +211,12 @@ export function ResultPanel({ job, onReviewStarted }: ResultPanelProps) {
       {htmlUrl ? (
         <section className="preview-pane preview-pane--single">
           <h3>HTML generado</h3>
-          <iframe className="preview" title="Vista previa HTML generado" src={htmlUrl} />
+          <iframe 
+            className="preview" 
+            title="Vista previa HTML generado" 
+            src={htmlUrl}
+            sandbox="allow-same-origin allow-scripts"
+          />
         </section>
       ) : null}
 
@@ -236,11 +241,21 @@ export function ResultPanel({ job, onReviewStarted }: ResultPanelProps) {
             <div className="compare-modal__grid">
               <section className="preview-pane">
                 <h3>HTML generado</h3>
-                <iframe className="preview preview--modal" title="Vista previa HTML generado" src={htmlUrl} />
+                <iframe 
+                  className="preview preview--modal" 
+                  title="Vista previa HTML generado" 
+                  src={htmlUrl}
+                  sandbox="allow-same-origin allow-scripts"
+                />
               </section>
               <section className="preview-pane">
                 <h3>DOCX original</h3>
-                <iframe className="preview preview--modal" title="Vista previa DOCX original" src={sourcePreviewUrl} />
+                <iframe 
+                  className="preview preview--modal" 
+                  title="Vista previa DOCX original" 
+                  src={sourcePreviewUrl}
+                  sandbox="allow-same-origin allow-scripts"
+                />
               </section>
             </div>
           </div>

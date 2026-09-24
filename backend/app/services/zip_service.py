@@ -51,8 +51,20 @@ class ZipService:
         original_copy = workspace.original_dir / sanitize_filename(source_zip.name, "article.zip")
         shutil.copy2(source_zip, original_copy)
 
+        total_extracted_size = 0
+        max_extracted_size = self.max_size_bytes * 10
+
         with zipfile.ZipFile(source_zip) as archive:
             self._validate_members(archive)
+            
+            for member in archive.infolist():
+                if member.file_size > max_extracted_size:
+                    raise ZipValidationError(f"Member {member.filename} exceeds maximum extracted size.")
+                
+                total_extracted_size += member.file_size
+                if total_extracted_size > max_extracted_size:
+                    raise ZipValidationError("Total extracted size exceeds limit. Possible zip bomb.")
+            
             archive.extractall(workspace.extracted_dir)
 
         files = [path for path in workspace.extracted_dir.rglob("*") if path.is_file()]

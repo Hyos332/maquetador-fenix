@@ -12,7 +12,7 @@ from playwright.sync_api import sync_playwright
 from app.models.article import ArticleTable
 from app.services.docx_parser import ParagraphBlock, ParsedDocument, TableBlock
 from app.services.section_extractor import MAIN_SECTION_TITLES
-from app.utils.files import ensure_directory
+from app.utils.files import ensure_directory, ensure_within_directory
 from app.utils.strings import clean_word_text, normalize_for_match
 
 
@@ -148,6 +148,8 @@ class TableImageExtractor:
         page.screenshot(path=str(output_path), clip=clip)
 
     def _convert_docx_to_html(self, docx_path: Path, output_dir: Path) -> Path:
+        ensure_within_directory(output_dir, docx_path)
+        
         result = subprocess.run(
             [
                 "libreoffice",
@@ -170,7 +172,10 @@ class TableImageExtractor:
         html_files = sorted(output_dir.glob("*.html"))
         if not html_files:
             raise RuntimeError("LibreOffice did not produce HTML")
-        return html_files[0]
+        
+        html_path = html_files[0]
+        ensure_within_directory(output_dir, html_path)
+        return html_path
 
     def _find_rendered_table_index(self, tables, signature: str, used_indexes: set[int]) -> int | None:
         count = tables.count()
