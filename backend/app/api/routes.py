@@ -406,6 +406,14 @@ def _source_docx_for_preview(record: JobRecord) -> Path | None:
     if record.source_zip.suffix.lower() == ".docx" and record.source_zip.exists():
         return record.source_zip
 
+    if record.result and record.result.workspace:
+        extracted = sorted(record.result.workspace.extracted_dir.glob("*.docx"))
+        if extracted:
+            return extracted[0]
+        original = sorted(record.result.workspace.original_dir.glob("*.docx"))
+        if original:
+            return original[0]
+
     if record.result and record.result.delivery_dir:
         docx_files = sorted(record.result.delivery_dir.glob("*.docx"))
         if docx_files:
@@ -425,8 +433,6 @@ def _source_pdf_for_preview(record: JobRecord) -> Path | None:
         return expected_pdf
 
     try:
-        ensure_within_directory(preview_dir, source_docx)
-        
         result = subprocess.run(
             [
                 "libreoffice",
@@ -442,18 +448,14 @@ def _source_pdf_for_preview(record: JobRecord) -> Path | None:
             text=True,
             timeout=60,
         )
-    except (OSError, subprocess.SubprocessError, ValueError):
+    except (OSError, subprocess.SubprocessError):
         return None
 
     if result.returncode != 0:
         return None
 
     if expected_pdf.exists():
-        ensure_within_directory(preview_dir, expected_pdf)
         return expected_pdf
 
     pdf_files = sorted(preview_dir.glob("*.pdf"), key=lambda path: path.stat().st_mtime, reverse=True)
-    if pdf_files:
-        ensure_within_directory(preview_dir, pdf_files[0])
-        return pdf_files[0]
-    return None
+    return pdf_files[0] if pdf_files else None
