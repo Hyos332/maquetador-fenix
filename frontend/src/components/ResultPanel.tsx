@@ -14,6 +14,7 @@ interface DiffPart {
 }
 
 interface SuggestionDiff {
+  original: string;
   originalParts: DiffPart[];
   revised: string;
   removedCount: number;
@@ -164,7 +165,15 @@ export function ResultPanel({ job, onReviewStarted }: ResultPanelProps) {
                   Usar sugerencia IA
                 </button>
               ) : null}
-              {abstractDiffEs ? <SuggestionDiffPreview diff={abstractDiffEs} /> : null}
+              {abstractDiffEs ? (
+                <SuggestionDiffPreview
+                  diff={abstractDiffEs}
+                  onUndo={() => {
+                    setAbstractEs(abstractDiffEs.original);
+                    setAbstractDiffEs(null);
+                  }}
+                />
+              ) : null}
             </label>
           ) : null}
 
@@ -191,7 +200,15 @@ export function ResultPanel({ job, onReviewStarted }: ResultPanelProps) {
                   Usar sugerencia IA
                 </button>
               ) : null}
-              {abstractDiffEn ? <SuggestionDiffPreview diff={abstractDiffEn} /> : null}
+              {abstractDiffEn ? (
+                <SuggestionDiffPreview
+                  diff={abstractDiffEn}
+                  onUndo={() => {
+                    setAbstractEn(abstractDiffEn.original);
+                    setAbstractDiffEn(null);
+                  }}
+                />
+              ) : null}
             </label>
           ) : null}
 
@@ -321,27 +338,23 @@ function isOutputReady(status: PipelineStatus) {
   return status === "COMPLETED" || status === "NEEDS_REVIEW";
 }
 
-function SuggestionDiffPreview({ diff }: { diff: SuggestionDiff }) {
+function SuggestionDiffPreview({ diff, onUndo }: { diff: SuggestionDiff; onUndo: () => void }) {
   return (
     <div className="suggestion-diff">
       <div className="suggestion-diff__header">
-        <p>Comparador de sugerencia</p>
-        <span>{diff.removedCount} palabras retiradas</span>
-      </div>
-      <div className="suggestion-diff__grid">
+        <p>Palabras retiradas</p>
         <div>
-          <h4>Original</h4>
-          <p className="suggestion-diff__text">
-            {diff.originalParts.map((part, index) =>
-              part.removed ? <mark key={index}>{part.text}</mark> : <span key={index}>{part.text}</span>,
-            )}
-          </p>
-        </div>
-        <div>
-          <h4>Sugerencia aplicada</h4>
-          <p className="suggestion-diff__text">{diff.revised}</p>
+          <span>{diff.removedCount}</span>
+          <button className="button button--ghost button--sm" type="button" onClick={onUndo}>
+            Deshacer sugerencia
+          </button>
         </div>
       </div>
+      <p className="suggestion-diff__text">
+        {diff.originalParts.map((part, index) =>
+          part.removed ? <mark key={index}>{part.text}</mark> : <span key={index}>{part.text}</span>,
+        )}
+      </p>
     </div>
   );
 }
@@ -371,7 +384,7 @@ function buildSuggestionDiff(original: string, revised: string): SuggestionDiff 
     originalParts.push({ text: original.slice(cursor), removed: false });
   }
 
-  return { originalParts, revised, removedCount };
+  return { original, originalParts, revised, removedCount };
 }
 
 function matchedOriginalIndexes(

@@ -381,8 +381,8 @@ a {
   font-size: 15px;
 }
 
-.abstract-review__header span,
-.abstract-field span {
+.abstract-review__header > span,
+.abstract-field > span {
   color: #687182;
   font-size: 13px;
 }
@@ -392,7 +392,7 @@ a {
   gap: 6px;
 }
 
-.abstract-field span {
+.abstract-field > span {
   display: flex;
   justify-content: space-between;
   gap: 12px;
@@ -426,47 +426,43 @@ a {
 
 .suggestion-diff {
   display: grid;
-  gap: 10px;
-  padding: 10px;
-  border: 1px solid #f1c7a7;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid #d7dee8;
   border-radius: 6px;
-  background: #fff8f2;
+  background: #fbfcfe;
 }
 
 .suggestion-diff__header {
   display: flex;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
 }
 
-.suggestion-diff__header p,
-.suggestion-diff__header span {
+.suggestion-diff__header p {
   margin: 0;
-  color: #9a4d13;
+  color: #334155;
   font-size: 12px;
   font-weight: 700;
 }
 
-.suggestion-diff__grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+.suggestion-diff__header div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-.suggestion-diff h4 {
-  margin: 0 0 6px;
-  color: #7c2d12;
+.suggestion-diff__header span {
+  color: #b42318;
   font-size: 12px;
+  font-weight: 700;
 }
 
 .suggestion-diff__text {
-  max-height: 190px;
+  max-height: 160px;
   overflow: auto;
   margin: 0;
-  padding: 9px;
-  border: 1px solid #f7d5ba;
-  border-radius: 6px;
-  background: #ffffff;
   color: #20242a;
   font-size: 13px;
   line-height: 1.45;
@@ -474,11 +470,13 @@ a {
 }
 
 .suggestion-diff mark {
-  padding: 1px 3px;
-  border-radius: 4px;
-  background: #ffe0c2;
-  color: #7c2d12;
-  text-decoration: line-through;
+  padding: 0;
+  background: transparent;
+  color: #9f1239;
+  text-decoration-line: underline;
+  text-decoration-color: #e11d48;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
 }
 
 .review-error {
@@ -612,10 +610,6 @@ a {
 
   .preview {
     height: 560px;
-  }
-
-  .suggestion-diff__grid {
-    grid-template-columns: 1fr;
   }
 
   .compare-modal {
