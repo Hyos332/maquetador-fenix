@@ -196,7 +196,7 @@ export default function App() {
       <section className="workspace">
         <div className="left-rail">
           <Dropzone file={file} disabled={busy} onFileSelected={setFile} onSubmit={startJob} />
-          
+
           {isUploading && progress && (
             <UploadProgressBar progress={progress} onCancel={cancelUpload} />
           )}

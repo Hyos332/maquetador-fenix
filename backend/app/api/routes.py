@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import tempfile
 import threading
 import subprocess
 import uuid
@@ -9,13 +10,15 @@ from html import escape
 from pathlib import Path
 from urllib.parse import quote
 
-from fastapi import APIRouter, BackgroundTasks, File, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel, ConfigDict
 
 from app.config.settings import Settings, settings as app_settings
 from app.models.pipeline import PipelineResult, PipelineStatus
+from app.models.pre_analysis import PreAnalysisResult
 from app.pipeline.article_pipeline import ArticlePipeline
+from app.services.pre_analyzer import PreAnalyzerService
 from app.utils.files import ensure_directory, ensure_within_directory, sanitize_filename
 from app.utils.strings import word_count
 
@@ -85,8 +88,31 @@ def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+@router.post("/pre-analyze", response_model=PreAnalysisResult)
+async def pre_analyze_article(file: UploadFile = File(...)) -> PreAnalysisResult:
+    filename = sanitize_filename(file.filename or "article.docx")
+    if not filename.lower().endswith((".zip", ".docx")):
+        raise HTTPException(status_code=400, detail="Solo se aceptan archivos .zip o .docx.")
+
+    with tempfile.NamedTemporaryFile(suffix=Path(filename).suffix, delete=False) as temp_file:
+        temp_path = Path(temp_file.name)
+        temp_path.write_bytes(await file.read())
+
+    try:
+        analyzer = PreAnalyzerService(app_settings)
+        return analyzer.analyze_file(temp_path, filename)
+    finally:
+        if temp_path.exists():
+            temp_path.unlink()
+
+
 @router.post("/jobs", response_model=CreateJobResponse)
-async def create_job(background_tasks: BackgroundTasks, file: UploadFile = File(...)) -> CreateJobResponse:
+async def create_job(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...),
+    abstract_es: str | None = Form(None),
+    abstract_en: str | None = Form(None),
+) -> CreateJobResponse:
     filename = sanitize_filename(file.filename or "article.docx")
     if not filename.lower().endswith((".zip", ".docx")):
         raise HTTPException(status_code=400, detail="Solo se aceptan archivos .zip o .docx.")
@@ -96,11 +122,23 @@ async def create_job(background_tasks: BackgroundTasks, file: UploadFile = File(
     source_zip = upload_dir / f"{job_id}_{filename}"
     source_zip.write_bytes(await file.read())
 
+    overrides: dict[str, str] = {}
+    if abstract_es:
+        overrides["abstract_es"] = abstract_es.strip()
+    if abstract_en:
+        overrides["abstract_en"] = abstract_en.strip()
+
     record = JobRecord(job_id=job_id, source_zip=source_zip)
     with jobs_lock:
         jobs[job_id] = record
 
-    background_tasks.add_task(_run_job, job_id, source_zip, app_settings)
+    background_tasks.add_task(
+        _run_job,
+        job_id,
+        source_zip,
+        app_settings,
+        abstract_overrides=overrides if overrides else None,
+    )
     return CreateJobResponse(job_id=job_id, status=record.status, message=record.message)
 
 

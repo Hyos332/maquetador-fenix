@@ -67,4 +67,31 @@ def test_api_creates_job_and_exposes_outputs(tmp_path, monkeypatch) -> None:
     reviewed_payload = client.get(f"/api/jobs/{job_id}").json()
     assert reviewed_payload["abstract_es_word_count"] <= reviewed_payload["abstract_word_limit"]
     assert not any("Resumen has" in warning for warning in reviewed_payload["warnings"])
+
     assert client.get(reviewed_payload["html_url"]).status_code == 200
+
+
+def test_pre_analyze_endpoint(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(
+        routes,
+        "app_settings",
+        Settings(
+            workspaces_dir=tmp_path / "workspaces",
+            deliveries_dir=tmp_path / "deliveries",
+            dry_run=True,
+        ),
+    )
+    client = TestClient(app)
+    with ALBERTO_FIXTURE.open("rb") as file:
+        response = client.post(
+            "/api/pre-analyze",
+            files={"file": ("Alberto Nilson.zip", file, "application/zip")},
+        )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["article_title"]
+    assert data["doi"] == "10.60134/mlshn.v5n1.4594"
+    assert data["abstract_es_word_count"] > 250
+    assert len(data["issues"]) > 0
+    assert data["estimated_seconds"] > 0

@@ -15,7 +15,7 @@ export function useFileUpload() {
   const [abortController, setAbortController] = useState<AbortController | null>(null);
 
   const uploadFile = useCallback(
-    async (url: string, file: File): Promise<Response> => {
+    async (url: string, file: File, extraFields?: Record<string, string>): Promise<Response> => {
       const controller = new AbortController();
       setAbortController(controller);
       setIsUploading(true);
@@ -92,6 +92,13 @@ export function useFileUpload() {
 
         const formData = new FormData();
         formData.append("file", file);
+        if (extraFields) {
+          for (const [key, value] of Object.entries(extraFields)) {
+            if (value) {
+              formData.append(key, value);
+            }
+          }
+        }
 
         xhr.open("POST", url);
         xhr.send(formData);

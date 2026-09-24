@@ -19,6 +19,7 @@ from app.services.image_extractor import ImageExtractor
 from app.services.journal_config import JournalConfigService
 from app.services.metadata_extractor import MetadataExtractor
 from app.services.mls_automation import MlsAutomationService
+from app.services.pre_analyzer import _smart_trim_abstract
 from app.services.reference_processor import ReferenceProcessor
 from app.services.section_extractor import SectionExtractor
 from app.services.table_image_extractor import TableImageExtractor
@@ -152,6 +153,13 @@ class ArticlePipeline:
         status = PipelineStatus.FAILED if errors else PipelineStatus.NEEDS_REVIEW if warnings else PipelineStatus.COMPLETED
         self._notify(progress, status, "Pipeline finalizado.")
 
+        suggested_es = ai_review.suggested_abstract_es
+        suggested_en = ai_review.suggested_abstract_en
+        if not suggested_es and article.abstract_es and word_count(article.abstract_es) > 250:
+            suggested_es = _smart_trim_abstract(article.abstract_es, max_words=245)
+        if not suggested_en and article.abstract_en and word_count(article.abstract_en) > 250:
+            suggested_en = _smart_trim_abstract(article.abstract_en, max_words=245)
+
         return PipelineResult(
             job_id=package.workspace.job_id,
             status=status,
@@ -163,8 +171,8 @@ class ArticlePipeline:
             delivery_dir=delivery_dir,
             delivery_zip=delivery_zip,
             ai_suggestions=ai_review.suggestions,
-            suggested_abstract_es=ai_review.suggested_abstract_es,
-            suggested_abstract_en=ai_review.suggested_abstract_en,
+            suggested_abstract_es=suggested_es,
+            suggested_abstract_en=suggested_en,
         )
 
     def _abstract_warnings(self, value: str | None, label: str) -> list[str]:

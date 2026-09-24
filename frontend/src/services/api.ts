@@ -2,6 +2,7 @@ import type {
   AbstractReviewPayload,
   CreateJobResponse,
   JobStatusResponse,
+  PreAnalysisResult,
 } from "../types/pipeline";
 
 const API_BASE_URL =
@@ -28,6 +29,27 @@ async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutM
     clearTimeout(timeoutId);
   }
 }
+
+export async function preAnalyzeArticle(file: File): Promise<PreAnalysisResult> {
+  const data = new FormData();
+  data.append("file", file);
+
+  const response = await fetchWithTimeout(
+    resolveApiUrl("/api/pre-analyze"),
+    {
+      method: "POST",
+      body: data,
+    },
+    20000
+  );
+
+  if (!response.ok) {
+    throw new Error(await readApiError(response));
+  }
+
+  return response.json();
+}
+
 
 export async function uploadArticleZip(file: File): Promise<CreateJobResponse> {
   const data = new FormData();
