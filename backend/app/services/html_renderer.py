@@ -29,8 +29,10 @@ class IntermediateHtmlRenderer:
         figure_groups = _figure_groups(article.figures)
         tables_by_number = {table.number: table for table in article.tables}
         rendered_groups: set[str] = set()
-        sections_html = "\n".join(
-            self._render_section(
+        
+        sections_with_hr = []
+        for section in article.sections:
+            section_html = self._render_section(
                 section.title,
                 section.html_content,
                 figures_by_number,
@@ -39,8 +41,10 @@ class IntermediateHtmlRenderer:
                 rendered_groups,
                 journal,
             )
-            for section in article.sections
-        )
+            sections_with_hr.append(section_html)
+        
+        sections_html = "\n<hr>\n".join(sections_with_hr)
+        
         references_html = "\n".join(self._render_reference(reference) for reference in article.references)
         citation_html = self._render_citation(article, journal)
         secondary_title = article.title_es if article.language == ArticleLanguage.ENGLISH else article.title_en
@@ -87,6 +91,7 @@ class IntermediateHtmlRenderer:
     {secondary_title_html}
     <hr>
     {sections_html}
+    <hr>
     <div>
         <p class="title">{references_title}</p>
         {references_html}
