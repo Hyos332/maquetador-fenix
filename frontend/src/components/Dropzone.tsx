@@ -1,5 +1,5 @@
 import { FileArchive, Upload } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 interface DropzoneProps {
   file: File | null;
@@ -11,6 +11,12 @@ interface DropzoneProps {
 export function Dropzone({ file, disabled, onFileSelected, onSubmit }: DropzoneProps) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [dragging, setDragging] = useState(false);
+
+  useEffect(() => {
+    if (!file && inputRef.current) {
+      inputRef.current.value = "";
+    }
+  }, [file]);
 
   function handleFiles(files: FileList | null) {
     const selected = files?.[0];

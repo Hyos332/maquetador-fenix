@@ -14,13 +14,20 @@ import type { CreateJobResponse, JobStatusResponse, PipelineStatus } from "./typ
 import "./styles.css";
 
 const terminalStatuses: PipelineStatus[] = ["COMPLETED", "FAILED", "NEEDS_REVIEW"];
+const ACTIVE_JOB_KEY = "maquetador-active-job-id";
 
 export default function App() {
   const [file, setFile] = useState<File | null>(null);
-  const [jobId, setJobId] = useState<string | null>(null);
+  const [jobId, setJobId] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem(ACTIVE_JOB_KEY);
+    } catch {
+      return null;
+    }
+  });
   const [job, setJob] = useState<JobStatusResponse | null>(null);
   const [status, setStatus] = useState<PipelineStatus>("PENDING");
-  const [message, setMessage] = useState("Esperando documento.");
+  const [message, setMessage] = useState(jobId ? "Cargando trabajo guardado." : "Esperando documento.");
   const [error, setError] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
   
@@ -34,6 +41,18 @@ export default function App() {
   const busy = useMemo(() => {
     return Boolean(jobId && !terminalStatuses.includes(status)) || isUploading;
   }, [jobId, status, isUploading]);
+
+  useEffect(() => {
+    try {
+      if (jobId) {
+        localStorage.setItem(ACTIVE_JOB_KEY, jobId);
+      } else {
+        localStorage.removeItem(ACTIVE_JOB_KEY);
+      }
+    } catch {
+      // localStorage can be unavailable in private or locked-down browser contexts.
+    }
+  }, [jobId]);
 
   useEffect(() => {
     if (!jobId || terminalStatuses.includes(status)) return;
@@ -175,6 +194,28 @@ export default function App() {
     }
   }
 
+  function startAnotherJob() {
+    setFile(null);
+    setJobId(null);
+    setJob(null);
+    setStatus("PENDING");
+    setMessage("Esperando documento.");
+    setError(null);
+    setShowHistory(false);
+  }
+
+  function clearSavedHistory() {
+    clearHistory();
+    startAnotherJob();
+  }
+
+  function removeSavedJob(removedJobId: string) {
+    removeJob(removedJobId);
+    if (removedJobId === jobId) {
+      startAnotherJob();
+    }
+  }
+
   function handleReviewStarted(updated: CreateJobResponse) {
     setError(null);
     setStatus(updated.status);
@@ -212,8 +253,8 @@ export default function App() {
             <JobHistoryPanel
               history={history}
               onSelectJob={loadJobFromHistory}
-              onRemoveJob={removeJob}
-              onClearHistory={clearHistory}
+              onRemoveJob={removeSavedJob}
+              onClearHistory={clearSavedHistory}
               currentJobId={jobId}
             />
           )}
@@ -228,7 +269,7 @@ export default function App() {
             </button>
           )}
         </div>
-        <ResultPanel job={job} onReviewStarted={handleReviewStarted} />
+        <ResultPanel job={job} onReviewStarted={handleReviewStarted} onStartAnother={startAnotherJob} />
       </section>
       
       <ToastContainer toasts={toasts} onClose={hideToast} />

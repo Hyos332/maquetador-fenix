@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { JobStatusResponse } from "../types/pipeline";
 
 interface JobHistoryItem {
@@ -32,7 +32,7 @@ export function useJobHistory() {
     }
   }, [history]);
 
-  const addJob = (jobId: string, fileName: string) => {
+  const addJob = useCallback((jobId: string, fileName: string) => {
     setHistory((prev) => {
       const filtered = prev.filter((item) => item.jobId !== jobId);
       const newItem: JobHistoryItem = {
@@ -43,9 +43,9 @@ export function useJobHistory() {
       };
       return [newItem, ...filtered].slice(0, MAX_HISTORY);
     });
-  };
+  }, []);
 
-  const updateJob = (jobId: string, job: JobStatusResponse) => {
+  const updateJob = useCallback((jobId: string, job: JobStatusResponse) => {
     setHistory((prev) =>
       prev.map((item) =>
         item.jobId === jobId
@@ -62,15 +62,15 @@ export function useJobHistory() {
           : item
       )
     );
-  };
+  }, []);
 
-  const clearHistory = () => {
+  const clearHistory = useCallback(() => {
     setHistory([]);
-  };
+  }, []);
 
-  const removeJob = (jobId: string) => {
+  const removeJob = useCallback((jobId: string) => {
     setHistory((prev) => prev.filter((item) => item.jobId !== jobId));
-  };
+  }, []);
 
   return {
     history,

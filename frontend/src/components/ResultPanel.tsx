@@ -1,4 +1,4 @@
-import { Download, FileText, FolderOpen, Send, Sparkles, X } from "lucide-react";
+import { Download, FileText, FolderOpen, Plus, Send, Sparkles, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { resolveApiUrl, updateAbstracts } from "../services/api";
 import type { CreateJobResponse, JobStatusResponse, PipelineStatus } from "../types/pipeline";
@@ -6,6 +6,7 @@ import type { CreateJobResponse, JobStatusResponse, PipelineStatus } from "../ty
 interface ResultPanelProps {
   job: JobStatusResponse | null;
   onReviewStarted: (job: CreateJobResponse) => void;
+  onStartAnother: () => void;
 }
 
 interface DiffPart {
@@ -27,7 +28,7 @@ interface RemovalTooltip {
   top: number;
 }
 
-export function ResultPanel({ job, onReviewStarted }: ResultPanelProps) {
+export function ResultPanel({ job, onReviewStarted, onStartAnother }: ResultPanelProps) {
   const [abstractEs, setAbstractEs] = useState("");
   const [abstractEn, setAbstractEn] = useState("");
   const [savingReview, setSavingReview] = useState(false);
@@ -78,6 +79,7 @@ export function ResultPanel({ job, onReviewStarted }: ResultPanelProps) {
   const abstractReview = getAbstractReviewState(job, abstractEs, abstractEn);
   const regularWarnings = job.warnings.filter((warning) => !warning.startsWith("AI: "));
   const outputsReady = isOutputReady(job.status);
+  const canStartAnother = isTerminalStatus(job.status);
 
   async function submitAbstractReview() {
     if (!abstractReview.shouldShow || abstractReview.hasOverLimit) return;
@@ -263,6 +265,12 @@ export function ResultPanel({ job, onReviewStarted }: ResultPanelProps) {
             Comparar documento original
           </button>
         ) : null}
+        {canStartAnother ? (
+          <button className="button button--secondary" type="button" onClick={onStartAnother}>
+            <Plus size={17} />
+            Maquetar otro documento
+          </button>
+        ) : null}
       </div>
 
       {htmlUrl ? (
@@ -343,6 +351,10 @@ function getAbstractReviewState(job: JobStatusResponse, abstractEs: string, abst
 
 function isOutputReady(status: PipelineStatus) {
   return status === "COMPLETED" || status === "NEEDS_REVIEW";
+}
+
+function isTerminalStatus(status: PipelineStatus) {
+  return status === "COMPLETED" || status === "NEEDS_REVIEW" || status === "FAILED";
 }
 
 function SuggestionDiffPreview({ diff, onUndo }: { diff: SuggestionDiff; onUndo: () => void }) {
