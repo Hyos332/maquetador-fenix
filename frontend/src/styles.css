@@ -424,35 +424,61 @@ a {
   border-color: #227c70;
 }
 
-.removed-words {
+.suggestion-diff {
   display: grid;
-  gap: 8px;
+  gap: 10px;
   padding: 10px;
   border: 1px solid #f1c7a7;
   border-radius: 6px;
   background: #fff8f2;
 }
 
-.removed-words p {
+.suggestion-diff__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.suggestion-diff__header p,
+.suggestion-diff__header span {
   margin: 0;
   color: #9a4d13;
   font-size: 12px;
   font-weight: 700;
 }
 
-.removed-words div {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+.suggestion-diff__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
 }
 
-.removed-words mark {
-  padding: 3px 6px;
-  border-radius: 5px;
-  background: #ffe0c2;
+.suggestion-diff h4 {
+  margin: 0 0 6px;
   color: #7c2d12;
   font-size: 12px;
-  line-height: 1.35;
+}
+
+.suggestion-diff__text {
+  max-height: 190px;
+  overflow: auto;
+  margin: 0;
+  padding: 9px;
+  border: 1px solid #f7d5ba;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #20242a;
+  font-size: 13px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+.suggestion-diff mark {
+  padding: 1px 3px;
+  border-radius: 4px;
+  background: #ffe0c2;
+  color: #7c2d12;
+  text-decoration: line-through;
 }
 
 .review-error {
@@ -586,6 +612,10 @@ a {
 
   .preview {
     height: 560px;
+  }
+
+  .suggestion-diff__grid {
+    grid-template-columns: 1fr;
   }
 
   .compare-modal {

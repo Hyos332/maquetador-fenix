@@ -34,6 +34,7 @@ def test_api_creates_job_and_exposes_outputs(tmp_path, monkeypatch) -> None:
     status_response = client.get(f"/api/jobs/{job_id}")
     assert status_response.status_code == 200
     payload = status_response.json()
+    assert payload["author_name"] == "Alberto Nilson"
     assert payload["doi"] == "10.60134/mlshn.v5n1.4594"
     assert payload["references_count"] == 175
     assert payload["abstract_es_word_count"] > payload["abstract_word_limit"]

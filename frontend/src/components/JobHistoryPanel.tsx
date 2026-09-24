@@ -5,6 +5,7 @@ interface JobHistoryItem {
   jobId: string;
   fileName: string;
   articleTitle?: string;
+  authorName?: string;
   status: string;
   timestamp: number;
   completedAt?: number;
@@ -96,7 +97,7 @@ export function JobHistoryPanel({
               </div>
               <div className="history-item__content">
                 <div className="history-item__title">
-                  {item.articleTitle || item.fileName}
+                  {item.authorName || item.fileName}
                 </div>
                 <div className="history-item__meta">
                   <span className="history-item__status">

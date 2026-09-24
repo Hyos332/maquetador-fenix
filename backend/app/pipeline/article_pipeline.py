@@ -156,9 +156,9 @@ class ArticlePipeline:
         suggested_es = ai_review.suggested_abstract_es
         suggested_en = ai_review.suggested_abstract_en
         if not suggested_es and article.abstract_es and word_count(article.abstract_es) > 250:
-            suggested_es = _smart_trim_abstract(article.abstract_es, max_words=245)
+            suggested_es = _smart_trim_abstract(article.abstract_es, max_words=250)
         if not suggested_en and article.abstract_en and word_count(article.abstract_en) > 250:
-            suggested_en = _smart_trim_abstract(article.abstract_en, max_words=245)
+            suggested_en = _smart_trim_abstract(article.abstract_en, max_words=250)
 
         return PipelineResult(
             job_id=package.workspace.job_id,

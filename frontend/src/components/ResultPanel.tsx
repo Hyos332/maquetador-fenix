@@ -8,22 +8,33 @@ interface ResultPanelProps {
   onReviewStarted: (job: CreateJobResponse) => void;
 }
 
+interface DiffPart {
+  text: string;
+  removed: boolean;
+}
+
+interface SuggestionDiff {
+  originalParts: DiffPart[];
+  revised: string;
+  removedCount: number;
+}
+
 export function ResultPanel({ job, onReviewStarted }: ResultPanelProps) {
   const [abstractEs, setAbstractEs] = useState("");
   const [abstractEn, setAbstractEn] = useState("");
   const [savingReview, setSavingReview] = useState(false);
   const [reviewError, setReviewError] = useState<string | null>(null);
   const [compareOpen, setCompareOpen] = useState(false);
-  const [removedAbstractEs, setRemovedAbstractEs] = useState<string[]>([]);
-  const [removedAbstractEn, setRemovedAbstractEn] = useState<string[]>([]);
+  const [abstractDiffEs, setAbstractDiffEs] = useState<SuggestionDiff | null>(null);
+  const [abstractDiffEn, setAbstractDiffEn] = useState<SuggestionDiff | null>(null);
 
   useEffect(() => {
     setAbstractEs(job?.abstract_es ?? "");
     setAbstractEn(job?.abstract_en ?? "");
     setReviewError(null);
     setCompareOpen(false);
-    setRemovedAbstractEs([]);
-    setRemovedAbstractEn([]);
+    setAbstractDiffEs(null);
+    setAbstractDiffEn(null);
   }, [job?.job_id, job?.abstract_es, job?.abstract_en]);
 
   useEffect(() => {
@@ -145,7 +156,7 @@ export function ResultPanel({ job, onReviewStarted }: ResultPanelProps) {
                   type="button"
                   onClick={() => {
                     const suggestion = job.suggested_abstract_es ?? "";
-                    setRemovedAbstractEs(removedWordGroups(abstractEs, suggestion));
+                    setAbstractDiffEs(buildSuggestionDiff(abstractEs, suggestion));
                     setAbstractEs(suggestion);
                   }}
                 >
@@ -153,7 +164,7 @@ export function ResultPanel({ job, onReviewStarted }: ResultPanelProps) {
                   Usar sugerencia IA
                 </button>
               ) : null}
-              {removedAbstractEs.length ? <RemovedWordsPreview groups={removedAbstractEs} /> : null}
+              {abstractDiffEs ? <SuggestionDiffPreview diff={abstractDiffEs} /> : null}
             </label>
           ) : null}
 
@@ -172,7 +183,7 @@ export function ResultPanel({ job, onReviewStarted }: ResultPanelProps) {
                   type="button"
                   onClick={() => {
                     const suggestion = job.suggested_abstract_en ?? "";
-                    setRemovedAbstractEn(removedWordGroups(abstractEn, suggestion));
+                    setAbstractDiffEn(buildSuggestionDiff(abstractEn, suggestion));
                     setAbstractEn(suggestion);
                   }}
                 >
@@ -180,7 +191,7 @@ export function ResultPanel({ job, onReviewStarted }: ResultPanelProps) {
                   Usar sugerencia IA
                 </button>
               ) : null}
-              {removedAbstractEn.length ? <RemovedWordsPreview groups={removedAbstractEn} /> : null}
+              {abstractDiffEn ? <SuggestionDiffPreview diff={abstractDiffEn} /> : null}
             </label>
           ) : null}
 
@@ -310,46 +321,61 @@ function isOutputReady(status: PipelineStatus) {
   return status === "COMPLETED" || status === "NEEDS_REVIEW";
 }
 
-function RemovedWordsPreview({ groups }: { groups: string[] }) {
+function SuggestionDiffPreview({ diff }: { diff: SuggestionDiff }) {
   return (
-    <div className="removed-words">
-      <p>Texto retirado por la sugerencia</p>
-      <div>
-        {groups.map((group, index) => (
-          <mark key={`${group}-${index}`}>{group}</mark>
-        ))}
+    <div className="suggestion-diff">
+      <div className="suggestion-diff__header">
+        <p>Comparador de sugerencia</p>
+        <span>{diff.removedCount} palabras retiradas</span>
+      </div>
+      <div className="suggestion-diff__grid">
+        <div>
+          <h4>Original</h4>
+          <p className="suggestion-diff__text">
+            {diff.originalParts.map((part, index) =>
+              part.removed ? <mark key={index}>{part.text}</mark> : <span key={index}>{part.text}</span>,
+            )}
+          </p>
+        </div>
+        <div>
+          <h4>Sugerencia aplicada</h4>
+          <p className="suggestion-diff__text">{diff.revised}</p>
+        </div>
       </div>
     </div>
   );
 }
 
-function removedWordGroups(original: string, revised: string) {
-  const originalTokens = tokenizeWords(original);
+function buildSuggestionDiff(original: string, revised: string): SuggestionDiff {
+  const originalTokens = tokenizeWordsWithPosition(original);
   const revisedTokens = tokenizeWords(revised);
   const keepIndexes = matchedOriginalIndexes(originalTokens, revisedTokens);
-  const groups: string[] = [];
-  let current: string[] = [];
+  const originalParts: DiffPart[] = [];
+  let cursor = 0;
+  let removedCount = 0;
 
   originalTokens.forEach((token, index) => {
-    if (keepIndexes.has(index)) {
-      if (current.length) {
-        groups.push(current.join(" "));
-        current = [];
-      }
-      return;
+    if (token.start > cursor) {
+      originalParts.push({ text: original.slice(cursor, token.start), removed: false });
     }
-    current.push(token.text);
+
+    const removed = !keepIndexes.has(index);
+    originalParts.push({ text: original.slice(token.start, token.end), removed });
+    if (removed) {
+      removedCount += 1;
+    }
+    cursor = token.end;
   });
 
-  if (current.length) {
-    groups.push(current.join(" "));
+  if (cursor < original.length) {
+    originalParts.push({ text: original.slice(cursor), removed: false });
   }
 
-  return groups.filter(Boolean).slice(0, 24);
+  return { originalParts, revised, removedCount };
 }
 
 function matchedOriginalIndexes(
-  originalTokens: Array<{ text: string; normalized: string }>,
+  originalTokens: Array<{ normalized: string }>,
   revisedTokens: Array<{ normalized: string }>,
 ) {
   const matched = new Set<number>();
@@ -367,6 +393,15 @@ function matchedOriginalIndexes(
   }
 
   return matched;
+}
+
+function tokenizeWordsWithPosition(value: string) {
+  return Array.from(value.matchAll(/[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu)).map((match) => ({
+    text: match[0],
+    normalized: normalizeToken(match[0]),
+    start: match.index ?? 0,
+    end: (match.index ?? 0) + match[0].length,
+  }));
 }
 
 function tokenizeWords(value: string) {

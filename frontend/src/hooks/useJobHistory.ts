@@ -5,6 +5,7 @@ interface JobHistoryItem {
   jobId: string;
   fileName: string;
   articleTitle?: string;
+  authorName?: string;
   status: string;
   timestamp: number;
   completedAt?: number;
@@ -51,6 +52,7 @@ export function useJobHistory() {
           ? {
               ...item,
               articleTitle: job.article_title || item.articleTitle,
+              authorName: job.author_name || item.authorName,
               status: job.status,
               completedAt:
                 job.status === "COMPLETED" || job.status === "FAILED" || job.status === "NEEDS_REVIEW"

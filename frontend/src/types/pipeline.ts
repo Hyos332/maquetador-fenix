@@ -24,6 +24,7 @@ export interface JobStatusResponse {
   warnings: string[];
   error: string | null;
   article_title: string | null;
+  author_name: string | null;
   doi: string | null;
   references_count: number | null;
   figures_count: number | null;

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 import tempfile
+import unicodedata
 import zipfile
 from pathlib import Path
 
@@ -14,23 +15,183 @@ from app.services.reference_processor import ReferenceProcessor
 from app.utils.strings import word_count
 
 
-def _smart_trim_abstract(text: str, max_words: int = 245) -> str:
+WORD_PATTERN = re.compile(r"\b[\w'’-]+\b", re.UNICODE)
+
+PRIMARY_REMOVABLE_WORDS = {
+    "ademas",
+    "asimismo",
+    "tambien",
+    "particularmente",
+    "principalmente",
+    "generalmente",
+    "actualmente",
+    "especialmente",
+    "notablemente",
+    "ampliamente",
+    "claramente",
+    "realmente",
+    "respectivamente",
+    "muy",
+    "diversos",
+    "diversas",
+    "diferentes",
+    "ciertos",
+    "ciertas",
+    "algunos",
+    "algunas",
+    "varios",
+    "varias",
+    "also",
+    "therefore",
+    "furthermore",
+    "additionally",
+    "particularly",
+    "mainly",
+    "generally",
+    "currently",
+    "especially",
+    "notably",
+    "clearly",
+    "really",
+    "very",
+    "various",
+    "different",
+    "several",
+}
+
+SMALL_REPEATED_WORDS = {
+    "que",
+    "de",
+    "del",
+    "la",
+    "el",
+    "los",
+    "las",
+    "en",
+    "por",
+    "para",
+    "con",
+    "se",
+    "a",
+    "y",
+    "o",
+    "un",
+    "una",
+    "the",
+    "of",
+    "and",
+    "in",
+    "to",
+    "for",
+    "with",
+    "that",
+    "as",
+    "by",
+    "from",
+    "on",
+    "a",
+    "an",
+}
+
+
+def _smart_trim_abstract(text: str, max_words: int = 250) -> str:
     if not text:
         return ""
-    sentences = re.split(r"(?<=[.!?])\s+", text.strip())
-    accumulated: list[str] = []
-    current_words = 0
-    for s in sentences:
-        words = word_count(s)
-        if current_words + words <= max_words:
-            accumulated.append(s)
-            current_words += words
+
+    current_count = word_count(text)
+    if current_count <= max_words:
+        return text.strip()
+
+    tokens = _word_tokens(text)
+    to_remove = current_count - max_words
+    removable_indexes = _minimal_removal_indexes(tokens, to_remove)
+    if removable_indexes:
+        trimmed = _remove_word_indexes(text, tokens, removable_indexes[:to_remove])
+        if word_count(trimmed) <= max_words:
+            return trimmed
+        return _truncate_to_word_limit(trimmed, max_words)
+
+    return _truncate_to_word_limit(text, max_words)
+
+
+def _word_tokens(text: str) -> list[dict[str, int | str]]:
+    return [
+        {
+            "text": match.group(0),
+            "normalized": _normalize_token(match.group(0)),
+            "start": match.start(),
+            "end": match.end(),
+        }
+        for match in WORD_PATTERN.finditer(text)
+    ]
+
+
+def _minimal_removal_indexes(tokens: list[dict[str, int | str]], target_remove: int) -> list[int]:
+    selected: list[int] = []
+    selected_set: set[int] = set()
+
+    def add(index: int) -> None:
+        if index not in selected_set and len(selected) < target_remove:
+            selected.append(index)
+            selected_set.add(index)
+
+    for index in range(1, len(tokens)):
+        if tokens[index]["normalized"] == tokens[index - 1]["normalized"]:
+            add(index)
+
+    for index in _indexes_from_end(tokens, PRIMARY_REMOVABLE_WORDS):
+        add(index)
+
+    counts: dict[str, int] = {}
+    for token in tokens:
+        normalized = str(token["normalized"])
+        counts[normalized] = counts.get(normalized, 0) + 1
+
+    seen: set[str] = set()
+    for index in range(len(tokens) - 1, -1, -1):
+        normalized = str(tokens[index]["normalized"])
+        if normalized not in SMALL_REPEATED_WORDS or counts.get(normalized, 0) < 2:
+            continue
+        if normalized in seen:
+            add(index)
         else:
-            break
-    if accumulated:
-        return " ".join(accumulated)
-    words = text.split()[:max_words]
-    return " ".join(words) + "."
+            seen.add(normalized)
+
+    return selected
+
+
+def _indexes_from_end(tokens: list[dict[str, int | str]], words: set[str]) -> list[int]:
+    return [index for index in range(len(tokens) - 1, -1, -1) if str(tokens[index]["normalized"]) in words]
+
+
+def _remove_word_indexes(text: str, tokens: list[dict[str, int | str]], indexes: list[int]) -> str:
+    result = text
+    for index in sorted(indexes, reverse=True):
+        start = int(tokens[index]["start"])
+        end = int(tokens[index]["end"])
+        result = result[:start] + result[end:]
+
+    result = re.sub(r"\s+([,.;:!?])", r"\1", result)
+    result = re.sub(r"([¿¡(])\s+", r"\1", result)
+    result = re.sub(r"\s{2,}", " ", result)
+    result = re.sub(r"\s+([)\]])", r"\1", result)
+    return result.strip()
+
+
+def _truncate_to_word_limit(text: str, max_words: int) -> str:
+    tokens = _word_tokens(text)
+    if len(tokens) <= max_words:
+        return text.strip()
+
+    cutoff = int(tokens[max_words - 1]["end"])
+    truncated = text[:cutoff].rstrip(" ,;:")
+    return truncated if truncated.endswith((".", "!", "?")) else f"{truncated}."
+
+
+def _normalize_token(value: str) -> str:
+    normalized = unicodedata.normalize("NFKD", value)
+    ascii_value = "".join(char for char in normalized if not unicodedata.combining(char))
+    return ascii_value.casefold()
 
 
 class PreAnalyzerService:
@@ -149,10 +310,10 @@ class PreAnalyzerService:
                     suggestions.append(s)
 
         if not suggested_es and es_count > limit and article.abstract_es:
-            suggested_es = _smart_trim_abstract(article.abstract_es, max_words=245)
+            suggested_es = _smart_trim_abstract(article.abstract_es, max_words=250)
 
         if not suggested_en and en_count > limit and article.abstract_en:
-            suggested_en = _smart_trim_abstract(article.abstract_en, max_words=245)
+            suggested_en = _smart_trim_abstract(article.abstract_en, max_words=250)
 
         return PreAnalysisResult(
             file_name=original_filename,

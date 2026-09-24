@@ -53,6 +53,7 @@ class JobStatusResponse(BaseModel):
     warnings: list[str] = []
     error: str | None = None
     article_title: str | None = None
+    author_name: str | None = None
     doi: str | None = None
     references_count: int | None = None
     figures_count: int | None = None
@@ -324,6 +325,7 @@ def _get_record(job_id: str) -> JobRecord:
 
 def _to_status_response(record: JobRecord) -> JobStatusResponse:
     article = record.result.article if record.result else None
+    author_name = article.authors[0].full_name if article and article.authors else None
     html_url = f"/api/jobs/{record.job_id}/html" if record.result and record.result.html_path else None
     source_preview_url = (
         f"/api/jobs/{record.job_id}/source-preview"
@@ -345,6 +347,7 @@ def _to_status_response(record: JobRecord) -> JobStatusResponse:
         warnings=record.warnings,
         error=record.error,
         article_title=article.primary_title if article else None,
+        author_name=author_name,
         doi=article.doi if article else None,
         references_count=len(article.references) if article else None,
         figures_count=len(article.figures) if article else None,
