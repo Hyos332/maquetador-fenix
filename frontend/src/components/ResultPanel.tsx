@@ -94,8 +94,8 @@ export function ResultPanel({ job, onReviewStarted, onStartAnother }: ResultPane
   const sourcePreviewUrl = job.source_preview_url ? resolveApiUrl(job.source_preview_url) : null;
   const deliveryArchiveUrl = job.delivery_archive_url ? resolveApiUrl(job.delivery_archive_url) : null;
   const jobId = job.job_id;
-  const suggestedAbstractEs = job.suggested_abstract_es;
-  const suggestedAbstractEn = job.suggested_abstract_en;
+  const suggestedAbstractEs = limitTextToWordCount(job.suggested_abstract_es, job.abstract_word_limit);
+  const suggestedAbstractEn = limitTextToWordCount(job.suggested_abstract_en, job.abstract_word_limit);
   const abstractReview = getAbstractReviewState(job, abstractEs, abstractEn);
   const warningsApproved = approvedWarningJobIds.includes(jobId);
   const regularWarnings = warningsApproved ? [] : job.warnings.filter((warning) => !warning.startsWith("AI: "));
@@ -223,7 +223,7 @@ export function ResultPanel({ job, onReviewStarted, onStartAnother }: ResultPane
                   className="button button--secondary button--compact"
                   type="button"
                   onClick={() => {
-                    const suggestion = job.suggested_abstract_es ?? "";
+                    const suggestion = suggestedAbstractEs ?? "";
                     setAbstractDiffEs(buildSuggestionDiff(abstractEs, suggestion));
                     setAbstractEs(suggestion);
                   }}
@@ -258,7 +258,7 @@ export function ResultPanel({ job, onReviewStarted, onStartAnother }: ResultPane
                   className="button button--secondary button--compact"
                   type="button"
                   onClick={() => {
-                    const suggestion = job.suggested_abstract_en ?? "";
+                    const suggestion = suggestedAbstractEn ?? "";
                     setAbstractDiffEn(buildSuggestionDiff(abstractEn, suggestion));
                     setAbstractEn(suggestion);
                   }}
@@ -627,9 +627,20 @@ function hasAbstractWarning(warnings: string[], label: "Resumen" | "Abstract") {
 }
 
 function countWords(value: string) {
-  const trimmed = value.trim();
-  if (!trimmed) return 0;
-  return trimmed.split(/\s+/).length;
+  return tokenizeWords(value).length;
+}
+
+function limitTextToWordCount(value: string | null, limit: number) {
+  if (!value) return null;
+
+  const tokens = tokenizeWordsWithPosition(value);
+  if (tokens.length <= limit) {
+    return value;
+  }
+
+  const cutoff = tokens[limit - 1]?.end ?? value.length;
+  const trimmed = value.slice(0, cutoff).trim().replace(/[\s,;:]+$/u, "");
+  return /[.!?]$/u.test(trimmed) ? trimmed : `${trimmed}.`;
 }
 
 function labelForStatus(status: string) {
