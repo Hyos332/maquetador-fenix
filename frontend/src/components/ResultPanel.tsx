@@ -3,6 +3,8 @@ import { useEffect, useState } from "react";
 import { resolveApiUrl, updateAbstracts } from "../services/api";
 import type { CreateJobResponse, JobStatusResponse, PipelineStatus } from "../types/pipeline";
 
+const APPROVED_WARNINGS_KEY = "maquetador-approved-warning-jobs";
+
 interface ResultPanelProps {
   job: JobStatusResponse | null;
   onReviewStarted: (job: CreateJobResponse) => void;
@@ -36,6 +38,14 @@ export function ResultPanel({ job, onReviewStarted, onStartAnother }: ResultPane
   const [compareOpen, setCompareOpen] = useState(false);
   const [abstractDiffEs, setAbstractDiffEs] = useState<SuggestionDiff | null>(null);
   const [abstractDiffEn, setAbstractDiffEn] = useState<SuggestionDiff | null>(null);
+  const [approvedWarningJobIds, setApprovedWarningJobIds] = useState<string[]>(() => {
+    try {
+      const stored = localStorage.getItem(APPROVED_WARNINGS_KEY);
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  });
 
   useEffect(() => {
     setAbstractEs(job?.abstract_es ?? "");
@@ -63,6 +73,14 @@ export function ResultPanel({ job, onReviewStarted, onStartAnother }: ResultPane
     };
   }, [compareOpen]);
 
+  useEffect(() => {
+    try {
+      localStorage.setItem(APPROVED_WARNINGS_KEY, JSON.stringify(approvedWarningJobIds));
+    } catch {
+      // localStorage can be unavailable in private or locked-down browser contexts.
+    }
+  }, [approvedWarningJobIds]);
+
   if (!job) {
     return (
       <section className="result-panel result-panel--empty">
@@ -76,10 +94,18 @@ export function ResultPanel({ job, onReviewStarted, onStartAnother }: ResultPane
   const sourcePreviewUrl = job.source_preview_url ? resolveApiUrl(job.source_preview_url) : null;
   const deliveryArchiveUrl = job.delivery_archive_url ? resolveApiUrl(job.delivery_archive_url) : null;
   const jobId = job.job_id;
+  const suggestedAbstractEs = job.suggested_abstract_es;
+  const suggestedAbstractEn = job.suggested_abstract_en;
   const abstractReview = getAbstractReviewState(job, abstractEs, abstractEn);
-  const regularWarnings = job.warnings.filter((warning) => !warning.startsWith("AI: "));
+  const warningsApproved = approvedWarningJobIds.includes(jobId);
+  const regularWarnings = warningsApproved ? [] : job.warnings.filter((warning) => !warning.startsWith("AI: "));
+  const translatedWarnings = regularWarnings.map(translateWarning);
   const outputsReady = isOutputReady(job.status);
   const canStartAnother = isTerminalStatus(job.status);
+  const canUseAnySuggestion = Boolean(
+    (abstractReview.showEs && suggestedAbstractEs) ||
+      (abstractReview.showEn && suggestedAbstractEn),
+  );
 
   async function submitAbstractReview() {
     if (!abstractReview.shouldShow || abstractReview.hasOverLimit) return;
@@ -97,6 +123,22 @@ export function ResultPanel({ job, onReviewStarted, onStartAnother }: ResultPane
       setReviewError(error instanceof Error ? error.message : "No se pudo enviar la revisión.");
     } finally {
       setSavingReview(false);
+    }
+  }
+
+  function approveWarnings() {
+    setApprovedWarningJobIds((current) => (current.includes(jobId) ? current : [...current, jobId]));
+  }
+
+  function useAvailableSuggestions() {
+    if (abstractReview.showEs && suggestedAbstractEs) {
+      setAbstractDiffEs(buildSuggestionDiff(abstractEs, suggestedAbstractEs));
+      setAbstractEs(suggestedAbstractEs);
+    }
+
+    if (abstractReview.showEn && suggestedAbstractEn) {
+      setAbstractDiffEn(buildSuggestionDiff(abstractEn, suggestedAbstractEn));
+      setAbstractEn(suggestedAbstractEn);
     }
   }
 
@@ -124,9 +166,14 @@ export function ResultPanel({ job, onReviewStarted, onStartAnother }: ResultPane
       {regularWarnings.length ? (
         <div className="warnings">
           <h3>Revisión necesaria</h3>
-          {regularWarnings.map((warning) => (
+          {translatedWarnings.map((warning) => (
             <p key={warning}>{warning}</p>
           ))}
+          <div className="warnings__actions">
+            <button className="button button--secondary button--compact" type="button" onClick={approveWarnings}>
+              Aprobar advertencias
+            </button>
+          </div>
         </div>
       ) : null}
 
@@ -150,6 +197,17 @@ export function ResultPanel({ job, onReviewStarted, onStartAnother }: ResultPane
               Máximo {job.abstract_word_limit} palabras
             </span>
           </div>
+
+          {canUseAnySuggestion ? (
+            <button
+              className="button button--secondary button--compact"
+              type="button"
+              onClick={useAvailableSuggestions}
+            >
+              <Sparkles size={15} />
+              Usar sugerencias disponibles
+            </button>
+          ) : null}
 
           {abstractReview.showEs ? (
             <label className="abstract-field">
@@ -558,7 +616,14 @@ const LOW_IMPACT_WORDS = new Set([
 ]);
 
 function hasAbstractWarning(warnings: string[], label: "Resumen" | "Abstract") {
-  return warnings.some((warning) => warning.startsWith(`${label} has`) && warning.includes("250"));
+  const translatedLabel = label === "Resumen" ? "resumen" : "abstract";
+  return warnings.some((warning) => {
+    const normalized = warning.toLocaleLowerCase();
+    return (
+      (warning.startsWith(`${label} has`) && warning.includes("250")) ||
+      (normalized.includes(`${translatedLabel} tiene`) && normalized.includes("250"))
+    );
+  });
 }
 
 function countWords(value: string) {
@@ -581,4 +646,52 @@ function labelForStatus(status: string) {
     FAILED: "Falló",
   };
   return labels[status] ?? status;
+}
+
+function translateWarning(warning: string) {
+  const embeddedMatch = warning.match(
+    /^(.+?) is embedded with extra text in the DOCX; review the figure placement\/caption\.$/,
+  );
+  if (embeddedMatch) {
+    return `${embeddedMatch[1]} está incrustada con texto adicional en el DOCX; revisa la ubicación de la figura o su pie.`;
+  }
+
+  const abstractMatch = warning.match(/^(Resumen|Abstract) has (\d+) words; maximum allowed is 250\.$/);
+  if (abstractMatch) {
+    const label = abstractMatch[1] === "Resumen" ? "El resumen" : "El abstract";
+    return `${label} tiene ${abstractMatch[2]} palabras; máximo permitido: 250.`;
+  }
+
+  const dateMatch = warning.match(/^Date text not found in HTML: (.+)$/);
+  if (dateMatch) {
+    return `Fecha no encontrada en el HTML: ${dateMatch[1]}`;
+  }
+
+  const missingReferenceMatch = warning.match(/^Missing reference numbers: (.+)$/);
+  if (missingReferenceMatch) {
+    return `Faltan números de referencia: ${missingReferenceMatch[1]}`;
+  }
+
+  const missingLogoMatch = warning.match(/^EPUB missing journal logo: (.+)$/);
+  if (missingLogoMatch) {
+    return `Falta el logo de la revista en el EPUB: ${missingLogoMatch[1]}`;
+  }
+
+  const missingTableMatch = warning.match(/^Could not match original DOCX table for (.+)\.$/);
+  if (missingTableMatch) {
+    return `No se pudo emparejar la tabla original del DOCX para ${missingTableMatch[1]}.`;
+  }
+
+  const missingStyleMatch = warning.match(/^(Figure|Table) image does not have required style: (.+)$/);
+  if (missingStyleMatch) {
+    const label = missingStyleMatch[1] === "Figure" ? "La figura" : "La tabla";
+    return `${label} no tiene el estilo requerido: ${missingStyleMatch[2]}`;
+  }
+
+  const translations: Record<string, string> = {
+    "Article DOI is missing.": "Falta el DOI del artículo.",
+    "Duplicate reference numbers detected.": "Hay números de referencia duplicados.",
+  };
+
+  return translations[warning] ?? warning;
 }
