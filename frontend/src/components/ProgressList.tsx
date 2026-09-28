@@ -14,9 +14,10 @@ const order = steps.map((step) => step.status);
 
 interface ProgressListProps {
   currentStatus: PipelineStatus;
+  warningsApproved?: boolean;
 }
 
-export function ProgressList({ currentStatus }: ProgressListProps) {
+export function ProgressList({ currentStatus, warningsApproved = false }: ProgressListProps) {
   const currentIndex = order.indexOf(currentStatus);
 
   return (
@@ -24,7 +25,7 @@ export function ProgressList({ currentStatus }: ProgressListProps) {
       <h2>Progreso</h2>
       <ol className="progress-list">
         {steps.map((step, index) => {
-          const state = getStepState(currentStatus, currentIndex, index);
+          const state = getStepState(currentStatus, currentIndex, index, warningsApproved);
           return (
             <li key={step.status} className={`progress-item progress-item--${state}`}>
               <span className="progress-item__icon">{renderIcon(state)}</span>
@@ -37,8 +38,9 @@ export function ProgressList({ currentStatus }: ProgressListProps) {
   );
 }
 
-function getStepState(status: PipelineStatus, currentIndex: number, index: number) {
+function getStepState(status: PipelineStatus, currentIndex: number, index: number, warningsApproved: boolean) {
   if (status === "FAILED") return index <= Math.max(currentIndex, 0) ? "failed" : "pending";
+  if (status === "NEEDS_REVIEW" && warningsApproved) return "done";
   if (status === "NEEDS_REVIEW") return index < steps.length - 1 ? "done" : "review";
   if (currentIndex === -1) return index === 0 && status !== "PENDING" ? "active" : "pending";
   if (index < currentIndex) return "done";

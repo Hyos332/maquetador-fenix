@@ -3,12 +3,12 @@ import { useEffect, useState } from "react";
 import { resolveApiUrl, updateAbstracts } from "../services/api";
 import type { CreateJobResponse, JobStatusResponse, PipelineStatus } from "../types/pipeline";
 
-const APPROVED_WARNINGS_KEY = "maquetador-approved-warning-jobs";
-
 interface ResultPanelProps {
   job: JobStatusResponse | null;
   onReviewStarted: (job: CreateJobResponse) => void;
   onStartAnother: () => void;
+  warningsApproved: boolean;
+  onApproveWarnings: () => void;
 }
 
 interface DiffPart {
@@ -30,7 +30,13 @@ interface RemovalTooltip {
   top: number;
 }
 
-export function ResultPanel({ job, onReviewStarted, onStartAnother }: ResultPanelProps) {
+export function ResultPanel({
+  job,
+  onReviewStarted,
+  onStartAnother,
+  warningsApproved,
+  onApproveWarnings,
+}: ResultPanelProps) {
   const [abstractEs, setAbstractEs] = useState("");
   const [abstractEn, setAbstractEn] = useState("");
   const [savingReview, setSavingReview] = useState(false);
@@ -38,14 +44,6 @@ export function ResultPanel({ job, onReviewStarted, onStartAnother }: ResultPane
   const [compareOpen, setCompareOpen] = useState(false);
   const [abstractDiffEs, setAbstractDiffEs] = useState<SuggestionDiff | null>(null);
   const [abstractDiffEn, setAbstractDiffEn] = useState<SuggestionDiff | null>(null);
-  const [approvedWarningJobIds, setApprovedWarningJobIds] = useState<string[]>(() => {
-    try {
-      const stored = localStorage.getItem(APPROVED_WARNINGS_KEY);
-      return stored ? JSON.parse(stored) : [];
-    } catch {
-      return [];
-    }
-  });
 
   useEffect(() => {
     setAbstractEs(job?.abstract_es ?? "");
@@ -73,14 +71,6 @@ export function ResultPanel({ job, onReviewStarted, onStartAnother }: ResultPane
     };
   }, [compareOpen]);
 
-  useEffect(() => {
-    try {
-      localStorage.setItem(APPROVED_WARNINGS_KEY, JSON.stringify(approvedWarningJobIds));
-    } catch {
-      // localStorage can be unavailable in private or locked-down browser contexts.
-    }
-  }, [approvedWarningJobIds]);
-
   if (!job) {
     return (
       <section className="result-panel result-panel--empty">
@@ -97,7 +87,6 @@ export function ResultPanel({ job, onReviewStarted, onStartAnother }: ResultPane
   const suggestedAbstractEs = limitTextToWordCount(job.suggested_abstract_es, job.abstract_word_limit);
   const suggestedAbstractEn = limitTextToWordCount(job.suggested_abstract_en, job.abstract_word_limit);
   const abstractReview = getAbstractReviewState(job, abstractEs, abstractEn);
-  const warningsApproved = approvedWarningJobIds.includes(jobId);
   const regularWarnings = warningsApproved ? [] : job.warnings.filter((warning) => !warning.startsWith("AI: "));
   const translatedWarnings = regularWarnings.map(translateWarning);
   const outputsReady = isOutputReady(job.status);
@@ -124,10 +113,6 @@ export function ResultPanel({ job, onReviewStarted, onStartAnother }: ResultPane
     } finally {
       setSavingReview(false);
     }
-  }
-
-  function approveWarnings() {
-    setApprovedWarningJobIds((current) => (current.includes(jobId) ? current : [...current, jobId]));
   }
 
   function useAvailableSuggestions() {
@@ -170,7 +155,7 @@ export function ResultPanel({ job, onReviewStarted, onStartAnother }: ResultPane
             <p key={warning}>{warning}</p>
           ))}
           <div className="warnings__actions">
-            <button className="button button--secondary button--compact" type="button" onClick={approveWarnings}>
+            <button className="button button--secondary button--compact" type="button" onClick={onApproveWarnings}>
               Aprobar advertencias
             </button>
           </div>

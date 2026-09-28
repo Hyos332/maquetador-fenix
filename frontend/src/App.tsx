@@ -15,6 +15,7 @@ import "./styles.css";
 
 const terminalStatuses: PipelineStatus[] = ["COMPLETED", "FAILED", "NEEDS_REVIEW"];
 const ACTIVE_JOB_KEY = "maquetador-active-job-id";
+const APPROVED_WARNINGS_KEY = "maquetador-approved-warning-jobs";
 
 export default function App() {
   const [file, setFile] = useState<File | null>(null);
@@ -31,6 +32,14 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
   const [restoringSavedJob, setRestoringSavedJob] = useState(Boolean(jobId));
+  const [approvedWarningJobIds, setApprovedWarningJobIds] = useState<string[]>(() => {
+    try {
+      const stored = localStorage.getItem(APPROVED_WARNINGS_KEY);
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  });
   
   const pollingIntervalRef = useRef<number>(1400);
   const consecutiveErrorsRef = useRef<number>(0);
@@ -42,6 +51,7 @@ export default function App() {
   const busy = useMemo(() => {
     return Boolean((restoringSavedJob && jobId) || (jobId && !terminalStatuses.includes(status))) || isUploading;
   }, [jobId, restoringSavedJob, status, isUploading]);
+  const warningsApproved = Boolean(jobId && approvedWarningJobIds.includes(jobId));
 
   useEffect(() => {
     try {
@@ -54,6 +64,14 @@ export default function App() {
       // localStorage can be unavailable in private or locked-down browser contexts.
     }
   }, [jobId]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(APPROVED_WARNINGS_KEY, JSON.stringify(approvedWarningJobIds));
+    } catch {
+      // localStorage can be unavailable in private or locked-down browser contexts.
+    }
+  }, [approvedWarningJobIds]);
 
   useEffect(() => {
     if (!jobId || !restoringSavedJob || job) return;
@@ -253,9 +271,15 @@ export default function App() {
 
   function removeSavedJob(removedJobId: string) {
     removeJob(removedJobId);
+    setApprovedWarningJobIds((current) => current.filter((id) => id !== removedJobId));
     if (removedJobId === jobId) {
       startAnotherJob();
     }
+  }
+
+  function approveCurrentWarnings() {
+    if (!jobId) return;
+    setApprovedWarningJobIds((current) => (current.includes(jobId) ? current : [...current, jobId]));
   }
 
   function handleReviewStarted(updated: CreateJobResponse) {
@@ -284,7 +308,7 @@ export default function App() {
             <UploadProgressBar progress={progress} onCancel={cancelUpload} />
           )}
           
-          <ProgressList currentStatus={status} />
+          <ProgressList currentStatus={status} warningsApproved={warningsApproved} />
           
           <section className="message-panel">
             <h2>Estado actual</h2>
@@ -311,7 +335,13 @@ export default function App() {
             </button>
           )}
         </div>
-        <ResultPanel job={job} onReviewStarted={handleReviewStarted} onStartAnother={startAnotherJob} />
+        <ResultPanel
+          job={job}
+          onReviewStarted={handleReviewStarted}
+          onStartAnother={startAnotherJob}
+          warningsApproved={warningsApproved}
+          onApproveWarnings={approveCurrentWarnings}
+        />
       </section>
       
       <ToastContainer toasts={toasts} onClose={hideToast} />
