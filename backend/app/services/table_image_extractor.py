@@ -12,6 +12,7 @@ from playwright.sync_api import sync_playwright
 from app.models.article import ArticleTable
 from app.services.docx_parser import ParagraphBlock, ParsedDocument, TableBlock
 from app.services.section_extractor import MAIN_SECTION_TITLES
+from app.services.table_classifier import collect_split_data_table_blocks, is_simple_data_table
 from app.utils.files import ensure_directory, ensure_within_directory
 from app.utils.strings import clean_word_text, normalize_for_match
 
@@ -43,8 +44,12 @@ class TableImageExtractor:
             ensure_directory(output_dir)
 
         candidates: list[_TableCandidate] = []
+        skipped_split_table_indexes: set[int] = set()
         inside_article_body = False
         for block_index, block in enumerate(parsed.blocks):
+            if block_index in skipped_split_table_indexes:
+                continue
+
             block_text = _block_text(block)
             normalized = normalize_for_match(block_text.rstrip(":"))
             if normalized in {"referencias", "references"}:
@@ -58,7 +63,14 @@ class TableImageExtractor:
             if not isinstance(block, TableBlock):
                 continue
 
-            force_capture = _follows_figure_or_table_caption(parsed, block_index)
+            split_data_tables = collect_split_data_table_blocks(parsed.blocks, block_index)
+            if split_data_tables:
+                skipped_split_table_indexes.update(
+                    range(block_index, block_index + len(split_data_tables))
+                )
+                continue
+
+            force_capture = _follows_figure_caption(parsed, block_index)
             if not _should_capture_table(block, force_capture=force_capture):
                 continue
 
@@ -200,17 +212,16 @@ def _should_capture_table(block: TableBlock, force_capture: bool = False) -> boo
     if force_capture:
         return True
 
-    max_columns = max((len(row) for row in block.rows), default=0)
-    return max_columns > 1 and len(nonempty_cells) >= 2
+    return not is_simple_data_table(block)
 
 
-def _follows_figure_or_table_caption(parsed: ParsedDocument, block_index: int) -> bool:
+def _follows_figure_caption(parsed: ParsedDocument, block_index: int) -> bool:
     for previous_index in range(max(0, block_index - 3), block_index):
         block = parsed.blocks[previous_index]
         if not isinstance(block, ParagraphBlock):
             continue
         normalized = normalize_for_match(clean_word_text(block.text).rstrip(":"))
-        if normalized.startswith(("figura ", "figure ", "tabla ", "table ")):
+        if normalized.startswith(("figura ", "figure ", "fig. ")):
             return True
     return False
 

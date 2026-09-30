@@ -14,24 +14,16 @@ import type { CreateJobResponse, JobStatusResponse, PipelineStatus } from "./typ
 import "./styles.css";
 
 const terminalStatuses: PipelineStatus[] = ["COMPLETED", "FAILED", "NEEDS_REVIEW"];
-const ACTIVE_JOB_KEY = "maquetador-active-job-id";
 const APPROVED_WARNINGS_KEY = "maquetador-approved-warning-jobs";
 
 export default function App() {
   const [file, setFile] = useState<File | null>(null);
-  const [jobId, setJobId] = useState<string | null>(() => {
-    try {
-      return localStorage.getItem(ACTIVE_JOB_KEY);
-    } catch {
-      return null;
-    }
-  });
+  const [jobId, setJobId] = useState<string | null>(null);
   const [job, setJob] = useState<JobStatusResponse | null>(null);
   const [status, setStatus] = useState<PipelineStatus>("PENDING");
-  const [message, setMessage] = useState(jobId ? "Cargando trabajo guardado." : "Esperando documento.");
+  const [message, setMessage] = useState("Esperando documento.");
   const [error, setError] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
-  const [restoringSavedJob, setRestoringSavedJob] = useState(Boolean(jobId));
   const [approvedWarningJobIds, setApprovedWarningJobIds] = useState<string[]>(() => {
     try {
       const stored = localStorage.getItem(APPROVED_WARNINGS_KEY);
@@ -49,21 +41,9 @@ export default function App() {
   const { uploadFile, cancelUpload, progress, isUploading } = useFileUpload();
 
   const busy = useMemo(() => {
-    return Boolean((restoringSavedJob && jobId) || (jobId && !terminalStatuses.includes(status))) || isUploading;
-  }, [jobId, restoringSavedJob, status, isUploading]);
+    return Boolean(jobId && !terminalStatuses.includes(status)) || isUploading;
+  }, [jobId, status, isUploading]);
   const warningsApproved = Boolean(jobId && approvedWarningJobIds.includes(jobId));
-
-  useEffect(() => {
-    try {
-      if (jobId) {
-        localStorage.setItem(ACTIVE_JOB_KEY, jobId);
-      } else {
-        localStorage.removeItem(ACTIVE_JOB_KEY);
-      }
-    } catch {
-      // localStorage can be unavailable in private or locked-down browser contexts.
-    }
-  }, [jobId]);
 
   useEffect(() => {
     try {
@@ -74,45 +54,7 @@ export default function App() {
   }, [approvedWarningJobIds]);
 
   useEffect(() => {
-    if (!jobId || !restoringSavedJob || job) return;
-
-    let cancelled = false;
-    const savedJobId = jobId;
-
-    async function restoreSavedJob() {
-      try {
-        const existingJob = await getJob(savedJobId);
-        if (cancelled) return;
-
-        setJob(existingJob);
-        setStatus(existingJob.status);
-        setMessage(existingJob.message);
-        setError(existingJob.error);
-        updateJob(savedJobId, existingJob);
-      } catch {
-        if (cancelled) return;
-
-        setJobId(null);
-        setJob(null);
-        setStatus("PENDING");
-        setMessage("El trabajo guardado ya no está disponible. Puedes maquetar otro documento.");
-        setError(null);
-      } finally {
-        if (!cancelled) {
-          setRestoringSavedJob(false);
-        }
-      }
-    }
-
-    restoreSavedJob();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [jobId, job, restoringSavedJob, updateJob]);
-
-  useEffect(() => {
-    if (!jobId || restoringSavedJob || terminalStatuses.includes(status)) return;
+    if (!jobId || terminalStatuses.includes(status)) return;
 
     pollingIntervalRef.current = 1400;
     consecutiveErrorsRef.current = 0;
@@ -175,7 +117,7 @@ export default function App() {
         window.clearTimeout(timer);
       }
     };
-  }, [jobId, restoringSavedJob, status, updateJob, success, errorToast]);
+  }, [jobId, status, updateJob, success, errorToast]);
 
   useEffect(() => {
     if ("Notification" in window && Notification.permission === "default") {
@@ -213,7 +155,6 @@ export default function App() {
     setStatus("PENDING");
     setMessage("Subiendo documento.");
     setJob(null);
-    setRestoringSavedJob(false);
 
     try {
       const response = await uploadFile(resolveApiUrl("/api/jobs"), file);
@@ -241,7 +182,6 @@ export default function App() {
     try {
       const existingJob = await getJob(selectedJobId);
       setJobId(selectedJobId);
-      setRestoringSavedJob(false);
       setJob(existingJob);
       setStatus(existingJob.status);
       setMessage(existingJob.message);
@@ -256,7 +196,6 @@ export default function App() {
   function startAnotherJob() {
     setFile(null);
     setJobId(null);
-    setRestoringSavedJob(false);
     setJob(null);
     setStatus("PENDING");
     setMessage("Esperando documento.");

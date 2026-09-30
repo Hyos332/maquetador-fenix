@@ -4,6 +4,7 @@ from html import escape
 
 from app.models.article import ArticleTable, Figure, Section
 from app.services.docx_parser import ParagraphBlock, ParsedDocument, TableBlock
+from app.services.table_classifier import collect_split_data_table_blocks, merge_table_blocks
 from app.utils.strings import clean_word_text, normalize_for_match
 
 MAIN_SECTION_TITLES = {
@@ -48,8 +49,12 @@ class SectionExtractor:
             if figure.group_id and figure.caption_block_index is not None
         }
         figure_subtitle_block_indexes = _figure_subtitle_block_indexes(parsed, figures or [])
+        consumed_split_table_indexes: set[int] = set()
 
         for block_index, block in enumerate(parsed.blocks):
+            if block_index in consumed_split_table_indexes:
+                continue
+
             if current_title and block_index in figures_by_block:
                 if isinstance(block, TableBlock):
                     before_table_text, after_table_text = _media_table_text(block)
@@ -99,6 +104,18 @@ class SectionExtractor:
                 if block_index in tables_by_block:
                     current_html.append(f"<!-- TABLE:{tables_by_block[block_index].number} -->")
                     continue
+                split_data_tables = collect_split_data_table_blocks(
+                    parsed.blocks,
+                    block_index,
+                    blocked_indexes=set(tables_by_block),
+                )
+                if split_data_tables:
+                    merged_table = merge_table_blocks(split_data_tables)
+                    current_html.append(_table_to_html(merged_table))
+                    consumed_split_table_indexes.update(
+                        range(block_index + 1, block_index + len(split_data_tables))
+                    )
+                    continue
                 current_html.append(_table_to_html(block))
 
         if current_title:
@@ -119,16 +136,70 @@ class SectionExtractor:
 
 
 def _table_to_html(block: TableBlock) -> str:
-    rows = []
-    for row in block.rows:
-        cleaned_cells = [clean_word_text(cell) for cell in row]
-        if not any(cleaned_cells):
-            continue
-        cells = "".join(f"<td>{escape(cell)}</td>" for cell in cleaned_cells)
-        rows.append(f"<tr>{cells}</tr>")
-    if not rows:
+    cleaned_rows = [
+        [clean_word_text(cell) for cell in row]
+        for row in block.rows
+        if any(clean_word_text(cell) for cell in row)
+    ]
+    if not cleaned_rows:
         return ""
-    return "<table>\n<tbody>\n" + "\n".join(rows) + "\n</tbody>\n</table>"
+
+    has_header = _looks_like_header_row(cleaned_rows[0], cleaned_rows[1:])
+    table_style = (
+        "width: 85%; margin: 12px auto; border-collapse: collapse; "
+        "font-size: 12px; line-height: 1.18;"
+    )
+    header_style = (
+        "border: 1px solid #111; "
+        "padding: 3px 8px; text-align: center; vertical-align: top;"
+    )
+    cell_style = (
+        "border: 1px solid #111; padding: 4px 8px; "
+        "text-align: left; vertical-align: top;"
+    )
+
+    parts = [f'<table class="data-table" style="{table_style}">']
+    body_rows = cleaned_rows
+    if has_header:
+        header_cells = "".join(
+            f'<th style="{header_style}">{_render_cell_text(cell)}</th>' for cell in cleaned_rows[0]
+        )
+        parts.append("<thead>")
+        parts.append(f"<tr>{header_cells}</tr>")
+        parts.append("</thead>")
+        body_rows = cleaned_rows[1:]
+
+    rows = []
+    for row in body_rows:
+        cells = "".join(f'<td style="{cell_style}">{_render_cell_text(cell)}</td>' for cell in row)
+        rows.append(f"<tr>{cells}</tr>")
+
+    parts.append("<tbody>")
+    parts.extend(rows)
+    parts.append("</tbody>")
+    parts.append("</table>")
+    return "\n".join(parts)
+
+
+def _looks_like_header_row(first_row: list[str], body_rows: list[list[str]]) -> bool:
+    if not body_rows or len(first_row) < 2:
+        return False
+    if any(not cell for cell in first_row):
+        return False
+    if any(len(cell) > 80 for cell in first_row):
+        return False
+
+    uppercase_cells = [
+        cell
+        for cell in first_row
+        if any(character.isalpha() for character in cell) and cell.upper() == cell
+    ]
+    short_cells = [cell for cell in first_row if len(cell.split()) <= 5]
+    return len(uppercase_cells) == len(first_row) or len(short_cells) == len(first_row)
+
+
+def _render_cell_text(text: str) -> str:
+    return "<br>".join(escape(part.strip()) for part in text.split(" | ") if part.strip())
 
 
 def _figures_by_block_index(figures: list[Figure]) -> dict[int, list[Figure]]:

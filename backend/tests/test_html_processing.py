@@ -2,7 +2,7 @@ from pathlib import Path
 
 from lxml import html
 
-from app.models.article import Article, ArticleTable, Author, Figure, Section
+from app.models.article import Article, ArticleTable, Author, Figure, Reference, Section
 from app.services.docx_parser import ParagraphBlock, ParsedDocument, TableBlock
 from app.models.pipeline import PipelineStatus
 from app.services.html_renderer import IntermediateHtmlRenderer
@@ -176,6 +176,31 @@ def test_renderer_keeps_table_captures_centered_at_mls_image_size() -> None:
     assert image.get("style") == "max-width: 700px; max-height: 600px;"
 
 
+def test_renderer_outputs_references_without_visible_added_numbers() -> None:
+    journal = JournalConfigService().load("mlser")
+    article = Article(
+        journal="mlser",
+        title_es="Artículo con referencias",
+        authors=[Author(full_name="Ana Test")],
+        sections=[Section(title="Resultados", html_content="<p>Texto</p>")],
+        references=[
+            Reference(number=1, raw_text="Cabrera, D. (2024). Título del artículo."),
+            Reference(number=2, raw_text="Rojas, M. (2023). Otro artículo."),
+        ],
+    )
+
+    rendered = IntermediateHtmlRenderer().render(article, journal)
+    root = html.fromstring(rendered)
+
+    ref_texts = [element.text_content() for element in root.xpath("//p[starts-with(@id, 'ref-')]")]
+    assert ref_texts == [
+        "Cabrera, D. (2024). Título del artículo.",
+        "Rojas, M. (2023). Otro artículo.",
+    ]
+    assert "[1] Cabrera" not in rendered
+    assert "{1}" not in rendered
+
+
 def test_section_extractor_preserves_group_caption_before_figure_grid() -> None:
     parsed = ParsedDocument(
         path=Path("article.docx"),
@@ -279,16 +304,43 @@ def test_section_extractor_preserves_text_rows_around_media_table() -> None:
     assert section.html_content.index("<!-- FIGURE:2 -->") < section.html_content.index("Nota: elaboración propia.")
 
 
-def test_table_image_extractor_captures_body_tables_only() -> None:
+def test_table_image_extractor_leaves_simple_body_tables_editable() -> None:
     parsed = ParsedDocument(
         path=Path("article.docx"),
         blocks=(
             TableBlock(index=1, rows=(("Resumen", "Texto"),)),
             ParagraphBlock(index=2, text="Introducción"),
             ParagraphBlock(index=3, text="Texto previo."),
-            TableBlock(index=4, rows=(("Celda A", "Celda B"), ("Celda C", "Celda D"))),
-            ParagraphBlock(index=5, text="Referencias"),
-            TableBlock(index=6, rows=(("No", "capturar"),)),
+            ParagraphBlock(index=4, text="Tabla 1"),
+            ParagraphBlock(index=5, text="Metas que responden al ODS No. 4"),
+            TableBlock(index=6, rows=(("Celda A", "Celda B"), ("Celda C", "Celda D"))),
+            ParagraphBlock(index=7, text="Referencias"),
+            TableBlock(index=8, rows=(("No", "capturar"),)),
+        ),
+        image_relationships={},
+        chart_relationships={},
+    )
+
+    result = TableImageExtractor().extract_tables(parsed)
+
+    assert result.tables == []
+
+
+def test_table_image_extractor_captures_non_simple_text_boxes() -> None:
+    parsed = ParsedDocument(
+        path=Path("article.docx"),
+        blocks=(
+            ParagraphBlock(index=1, text="Resultados"),
+            ParagraphBlock(index=2, text="Producción textual - estructura del relato"),
+            TableBlock(
+                index=3,
+                rows=(
+                    (
+                        "La laguna encantada | En la comunidad de la Merced, habitaba una familia compuesta por Juana y sus padres.",
+                        "Título | Planteamiento | Nudo | Desenlace",
+                    ),
+                ),
+            ),
         ),
         image_relationships={},
         chart_relationships={},
@@ -298,7 +350,98 @@ def test_table_image_extractor_captures_body_tables_only() -> None:
 
     assert len(result.tables) == 1
     assert result.tables[0].output_filename == "Table_1.PNG"
-    assert result.tables[0].block_index == 3
+    assert result.tables[0].block_index == 2
+
+
+def test_section_extractor_renders_simple_data_tables_as_editable_html() -> None:
+    parsed = ParsedDocument(
+        path=Path("article.docx"),
+        blocks=(
+            ParagraphBlock(index=1, text="Resultados"),
+            ParagraphBlock(index=2, text="Tabla 1"),
+            ParagraphBlock(index=3, text="Metas que responden al ODS No. 4"),
+            TableBlock(
+                index=4,
+                rows=(
+                    ("METAS", "RESULTADOS ESPERABLES"),
+                    (
+                        "Educación primaria y secundaria universal.",
+                        "Para 2030, velar por que todos los niños terminen los ciclos de la enseñanza primaria.",
+                    ),
+                    (
+                        "Desarrollo en la primera infancia y educación preescolar universal.",
+                        "Para 2030, velar por que todos los niños tengan acceso a servicios de atención.",
+                    ),
+                ),
+            ),
+            ParagraphBlock(index=5, text="Referencias"),
+        ),
+        image_relationships={},
+        chart_relationships={},
+    )
+
+    section = SectionExtractor().extract(parsed)[0]
+    root = html.fromstring(f"<div>{section.html_content}</div>")
+
+    data_table = root.xpath("//table[contains(concat(' ', normalize-space(@class), ' '), ' data-table ')]")[0]
+    assert data_table.xpath(".//th/text()") == ["METAS", "RESULTADOS ESPERABLES"]
+    assert "Educación primaria y secundaria universal." in data_table.text_content()
+    assert "Para 2030, velar por que todos los niños" in data_table.text_content()
+
+
+def test_split_row_data_tables_are_rendered_as_one_editable_table() -> None:
+    parsed = ParsedDocument(
+        path=Path("article.docx"),
+        blocks=(
+            ParagraphBlock(index=1, text="Results"),
+            ParagraphBlock(index=2, text="Table 1"),
+            ParagraphBlock(index=3, text="Participation in educational programs in Colombia and the United States"),
+            TableBlock(index=4, rows=(("Country", "Participation in educational programs (%)"),)),
+            TableBlock(index=5, rows=(("Colombia", "45%"),)),
+            TableBlock(index=6, rows=(("United States", "75%"),)),
+            ParagraphBlock(index=7, text="Note. The data show the percentage of inmates."),
+            ParagraphBlock(index=8, text="References"),
+        ),
+        image_relationships={},
+        chart_relationships={},
+    )
+
+    captured = TableImageExtractor().extract_tables(parsed)
+    section = SectionExtractor().extract(parsed)[0]
+    root = html.fromstring(f"<div>{section.html_content}</div>")
+    data_tables = root.xpath("//table[contains(concat(' ', normalize-space(@class), ' '), ' data-table ')]")
+    data_table = data_tables[0]
+
+    assert captured.tables == []
+    assert len(data_tables) == 1
+    assert root.xpath("count(//table[contains(concat(' ', normalize-space(@class), ' '), ' data-table ')]//tr)") == 3
+    assert root.xpath("//th/text()") == ["Country", "Participation in educational programs (%)"]
+    assert "border: 1px solid #111" in data_table.xpath(".//th")[0].get("style")
+    assert "border: 1px solid #111" in data_table.xpath(".//td")[0].get("style")
+    assert "Colombia" in root.text_content()
+    assert "45%" in root.text_content()
+    assert "United States" in root.text_content()
+    assert "75%" in root.text_content()
+
+
+def test_split_row_data_tables_require_table_caption_context() -> None:
+    parsed = ParsedDocument(
+        path=Path("article.docx"),
+        blocks=(
+            ParagraphBlock(index=1, text="Results"),
+            ParagraphBlock(index=2, text="Two short side notes."),
+            TableBlock(index=3, rows=(("Country", "Participation in educational programs (%)"),)),
+            TableBlock(index=4, rows=(("Colombia", "45%"),)),
+            ParagraphBlock(index=5, text="References"),
+        ),
+        image_relationships={},
+        chart_relationships={},
+    )
+
+    section = SectionExtractor().extract(parsed)[0]
+    root = html.fromstring(f"<div>{section.html_content}</div>")
+
+    assert len(root.xpath("//table[contains(concat(' ', normalize-space(@class), ' '), ' data-table ')]")) == 2
 
 
 def test_table_image_extractor_captures_single_cell_figure_tables() -> None:

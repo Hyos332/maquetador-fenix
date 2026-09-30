@@ -207,7 +207,7 @@ class IntermediateHtmlRenderer:
         )
 
     def _render_reference(self, reference: Reference) -> str:
-        return f'<p id="ref-{reference.number}">[{reference.number}] {escape(reference.raw_text)}</p>'
+        return f'<p id="ref-{reference.number}">{escape(reference.raw_text)}</p>'
 
     def _replace_figure_placeholders(
         self,
