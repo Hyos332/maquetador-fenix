@@ -12,6 +12,10 @@ from app.utils.files import ensure_directory
 
 FIGURE_PLACEHOLDER_PATTERN = re.compile(r"<!--\s*FIGURE:(\d+)\s*-->")
 TABLE_PLACEHOLDER_PATTERN = re.compile(r"<!--\s*TABLE:(\d+)\s*-->")
+DATE_LABELS = {
+    ArticleLanguage.SPANISH: ("Fecha de recepción", "Fecha de revisión", "Fecha de aceptación"),
+    ArticleLanguage.ENGLISH: ("Received", "Reviewed", "Accepted"),
+}
 
 
 class IntermediateHtmlRenderer:
@@ -251,10 +255,14 @@ class IntermediateHtmlRenderer:
         return TABLE_PLACEHOLDER_PATTERN.sub(replace, html_content)
 
     def _render_dates(self, article: Article) -> str:
+        received_label, reviewed_label, accepted_label = DATE_LABELS.get(
+            article.language,
+            DATE_LABELS[ArticleLanguage.SPANISH],
+        )
         return (
-            f"<b>Fecha de recepción:</b> {format_short_spanish_date(article.received_date)} / "
-            f"<b>Fecha de revisión:</b> {format_short_spanish_date(article.reviewed_date)} / "
-            f"<b>Fecha de aceptación:</b> {format_short_spanish_date(article.accepted_date)}"
+            f"<b>{received_label}:</b> {format_short_spanish_date(article.received_date)} / "
+            f"<b>{reviewed_label}:</b> {format_short_spanish_date(article.reviewed_date)} / "
+            f"<b>{accepted_label}:</b> {format_short_spanish_date(article.accepted_date)}"
         )
 
     def _render_citation(self, article: Article, journal: JournalConfig) -> str:

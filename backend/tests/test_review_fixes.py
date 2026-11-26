@@ -1,3 +1,4 @@
+from datetime import date
 from pathlib import Path
 from zipfile import ZipFile
 
@@ -324,3 +325,29 @@ def test_references_without_html_are_escaped() -> None:
     rendered = IntermediateHtmlRenderer().render(article, journal)
 
     assert "Autor &lt;script&gt; (2020)." in rendered
+
+
+def _dates_text(language: ArticleLanguage) -> str:
+    journal = JournalConfigService().load("mlser")
+    article = _bilingual_article(language).model_copy(
+        update={
+            "received_date": date(2023, 9, 27),
+            "reviewed_date": date(2023, 12, 18),
+            "accepted_date": date(2024, 2, 14),
+        }
+    )
+    root = html.fromstring(IntermediateHtmlRenderer().render(article, journal))
+    return " ".join(root.xpath("//p[contains(., '27/09/2023')]")[0].text_content().split())
+
+
+def test_english_article_uses_english_date_labels() -> None:
+    assert _dates_text(ArticleLanguage.ENGLISH) == (
+        "Received: 27/09/2023 / Reviewed: 18/12/2023 / Accepted: 14/02/2024"
+    )
+
+
+def test_spanish_article_keeps_spanish_date_labels() -> None:
+    assert _dates_text(ArticleLanguage.SPANISH) == (
+        "Fecha de recepción: 27/09/2023 / Fecha de revisión: 18/12/2023 / "
+        "Fecha de aceptación: 14/02/2024"
+    )
