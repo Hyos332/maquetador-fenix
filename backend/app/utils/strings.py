@@ -30,11 +30,13 @@ def normalize_whitespace(value: str) -> str:
     return WHITESPACE_PATTERN.sub(" ", value).strip()
 
 
+def clean_word_chars(value: str) -> str:
+    return INVISIBLE_WORD_CHARS_PATTERN.sub("", value.translate(SPACE_LIKE_CHARS))
+
+
 def clean_word_text(value: str) -> str:
     """Normalize text copied from DOCX XML without changing its meaning."""
-    translated = value.translate(SPACE_LIKE_CHARS)
-    without_invisible = INVISIBLE_WORD_CHARS_PATTERN.sub("", translated)
-    return normalize_whitespace(without_invisible)
+    return normalize_whitespace(clean_word_chars(value))
 
 
 def normalize_for_match(value: str) -> str:

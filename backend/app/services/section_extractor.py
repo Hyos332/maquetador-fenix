@@ -3,7 +3,7 @@ from __future__ import annotations
 from html import escape
 
 from app.models.article import ArticleTable, Figure, Section
-from app.services.docx_parser import ParagraphBlock, ParsedDocument, TableBlock
+from app.services.docx_parser import ParagraphBlock, ParsedDocument, TableBlock, TableCell
 from app.services.table_classifier import collect_split_data_table_blocks, merge_table_blocks
 from app.utils.strings import clean_word_text, normalize_for_match
 
@@ -99,7 +99,7 @@ class SectionExtractor:
                     elif block_index in figure_subtitle_block_indexes:
                         current_html.append(f'<p class="figure-subtitle"><i>{escape(text)}</i></p>')
                     else:
-                        current_html.append(f"<p>{escape(text)}</p>")
+                        current_html.append(f"<p>{block.html or escape(text)}</p>")
             elif isinstance(block, TableBlock) and current_title and block.rows:
                 if block_index in tables_by_block:
                     current_html.append(f"<!-- TABLE:{tables_by_block[block_index].number} -->")
@@ -136,49 +136,65 @@ class SectionExtractor:
 
 
 def _table_to_html(block: TableBlock) -> str:
-    cleaned_rows = [
-        [clean_word_text(cell) for cell in row]
-        for row in block.rows
-        if any(clean_word_text(cell) for cell in row)
-    ]
-    if not cleaned_rows:
+    rows = _table_rows(block)
+    if not rows:
         return ""
 
-    has_header = _looks_like_header_row(cleaned_rows[0], cleaned_rows[1:])
+    has_header = _looks_like_header_row(
+        [cell.text for cell in rows[0]],
+        [[cell.text for cell in row] for row in rows[1:]],
+    )
     table_style = (
         "width: 85%; margin: 12px auto; border-collapse: collapse; "
         "font-size: 12px; line-height: 1.18;"
     )
-    header_style = (
-        "border: 1px solid #111; "
-        "padding: 3px 8px; text-align: center; vertical-align: top;"
-    )
-    cell_style = (
-        "border: 1px solid #111; padding: 4px 8px; "
-        "text-align: left; vertical-align: top;"
-    )
 
     parts = [f'<table class="data-table" style="{table_style}">']
-    body_rows = cleaned_rows
+    body_rows = rows
     if has_header:
-        header_cells = "".join(
-            f'<th style="{header_style}">{_render_cell_text(cell)}</th>' for cell in cleaned_rows[0]
-        )
         parts.append("<thead>")
-        parts.append(f"<tr>{header_cells}</tr>")
+        parts.append(_table_row_html(rows[0], "th"))
         parts.append("</thead>")
-        body_rows = cleaned_rows[1:]
-
-    rows = []
-    for row in body_rows:
-        cells = "".join(f'<td style="{cell_style}">{_render_cell_text(cell)}</td>' for cell in row)
-        rows.append(f"<tr>{cells}</tr>")
+        body_rows = rows[1:]
 
     parts.append("<tbody>")
-    parts.extend(rows)
+    parts.extend(_table_row_html(row, "td") for row in body_rows)
     parts.append("</tbody>")
     parts.append("</table>")
     return "\n".join(parts)
+
+
+def _table_rows(block: TableBlock) -> list[tuple[TableCell, ...]]:
+    rows = list(block.cells) or [
+        tuple(_text_cell(clean_word_text(cell)) for cell in row)
+        for row in block.rows
+    ]
+    if any(cell.rowspan > 1 for row in rows for cell in row):
+        return [row for row in rows if row]
+    return [row for row in rows if any(clean_word_text(cell.text) for cell in row)]
+
+
+def _text_cell(text: str) -> TableCell:
+    return TableCell(text=text, html=_render_cell_text(text))
+
+
+def _table_row_html(row: tuple[TableCell, ...], tag: str) -> str:
+    return "<tr>" + "".join(_table_cell_html(cell, tag) for cell in row) + "</tr>"
+
+
+def _table_cell_html(cell: TableCell, tag: str) -> str:
+    default_align = "center" if tag == "th" else "left"
+    padding = "3px 8px" if tag == "th" else "4px 8px"
+    style = (
+        f"border: 1px solid #111; padding: {padding}; "
+        f"text-align: {cell.align or default_align}; vertical-align: top;"
+    )
+    spans = ""
+    if cell.colspan > 1:
+        spans += f' colspan="{cell.colspan}"'
+    if cell.rowspan > 1:
+        spans += f' rowspan="{cell.rowspan}"'
+    return f'<{tag}{spans} style="{style}">{cell.html}</{tag}>'
 
 
 def _looks_like_header_row(first_row: list[str], body_rows: list[list[str]]) -> bool:

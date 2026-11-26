@@ -7,6 +7,7 @@ from zipfile import ZipFile
 
 from lxml import etree
 
+from app.services.docx_formatting import StyleResolver, paragraph_alignment, paragraph_inline_html
 from app.utils.strings import clean_word_text
 
 WORD_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
@@ -44,6 +45,16 @@ class ParagraphBlock:
     text: str
     image_relationship_ids: tuple[str, ...] = ()
     chart_relationship_ids: tuple[str, ...] = ()
+    html: str = ""
+
+
+@dataclass(frozen=True)
+class TableCell:
+    text: str
+    html: str
+    colspan: int = 1
+    rowspan: int = 1
+    align: str = ""
 
 
 @dataclass(frozen=True)
@@ -53,6 +64,8 @@ class TableBlock:
     image_relationship_ids: tuple[str, ...] = ()
     image_cell_positions: tuple[tuple[int, int], ...] = ()
     chart_relationship_ids: tuple[str, ...] = ()
+    cells: tuple[tuple[TableCell, ...], ...] = ()
+    has_nested_table: bool = False
 
 
 DocumentBlock = ParagraphBlock | TableBlock
@@ -85,6 +98,7 @@ class DocxParser:
             document_root = etree.fromstring(archive.read("word/document.xml"))
             relationships = self._read_image_relationships(archive)
             chart_relationships = self._read_chart_relationships(archive)
+            resolver = StyleResolver.from_archive(archive)
             body = document_root.find("w:body", NS)
             if body is None:
                 return ParsedDocument(
@@ -94,7 +108,7 @@ class DocxParser:
                     chart_relationships=chart_relationships,
                 )
 
-            blocks = tuple(self._parse_body(body))
+            blocks = tuple(self._parse_body(body, resolver))
             return ParsedDocument(
                 path=docx_path,
                 blocks=blocks,
@@ -148,10 +162,10 @@ class DocxParser:
 
         return relationships
 
-    def _parse_body(self, body: etree._Element) -> Iterable[DocumentBlock]:
+    def _parse_body(self, body: etree._Element, resolver: StyleResolver) -> Iterable[DocumentBlock]:
         index = 0
         for child in self._iter_content_children(body):
-            parsed = self._parse_block(child, index=index + 1)
+            parsed = self._parse_block(child, index=index + 1, resolver=resolver)
             if parsed is None:
                 continue
 
@@ -170,15 +184,25 @@ class DocxParser:
             if tag in {"p", "tbl"}:
                 yield child
 
-    def _parse_block(self, element: etree._Element, index: int) -> DocumentBlock | None:
+    def _parse_block(
+        self,
+        element: etree._Element,
+        index: int,
+        resolver: StyleResolver,
+    ) -> DocumentBlock | None:
         tag = etree.QName(element).localname
         if tag == "p":
-            return self._parse_paragraph(element, index)
+            return self._parse_paragraph(element, index, resolver)
         if tag == "tbl":
-            return self._parse_table(element, index)
+            return self._parse_table(element, index, resolver)
         return None
 
-    def _parse_paragraph(self, paragraph: etree._Element, index: int) -> ParagraphBlock | None:
+    def _parse_paragraph(
+        self,
+        paragraph: etree._Element,
+        index: int,
+        resolver: StyleResolver,
+    ) -> ParagraphBlock | None:
         text = self._paragraph_text(paragraph)
         image_ids = tuple(paragraph.xpath(".//a:blip/@r:embed", namespaces=NS))
         chart_ids = tuple(paragraph.xpath(".//c:chart/@r:id", namespaces=NS))
@@ -191,9 +215,15 @@ class DocxParser:
             text=text,
             image_relationship_ids=image_ids,
             chart_relationship_ids=chart_ids,
+            html=paragraph_inline_html(paragraph, resolver) if text else "",
         )
 
-    def _parse_table(self, table: etree._Element, index: int) -> TableBlock | None:
+    def _parse_table(
+        self,
+        table: etree._Element,
+        index: int,
+        resolver: StyleResolver,
+    ) -> TableBlock | None:
         rows: list[tuple[str, ...]] = []
         image_ids: list[str] = []
         image_positions: list[tuple[int, int]] = []
@@ -219,7 +249,55 @@ class DocxParser:
             image_relationship_ids=tuple(image_ids),
             image_cell_positions=tuple(image_positions),
             chart_relationship_ids=tuple(chart_ids),
+            cells=self._parse_table_cells(table, resolver),
+            has_nested_table=bool(table.xpath("./w:tr/w:tc//w:tbl", namespaces=NS)),
         )
+
+    def _parse_table_cells(
+        self,
+        table: etree._Element,
+        resolver: StyleResolver,
+    ) -> tuple[tuple[TableCell, ...], ...]:
+        rows: list[list[dict]] = []
+        merge_origins: dict[int, dict] = {}
+        for row in table.xpath("./w:tr", namespaces=NS):
+            grid_column = _int_attribute(row.find("w:trPr/w:gridBefore", NS), default=0)
+            cells: list[dict] = []
+            for cell in row.xpath("./w:tc", namespaces=NS):
+                colspan = _int_attribute(cell.find("w:tcPr/w:gridSpan", NS), default=1)
+                vertical_merge = cell.find("w:tcPr/w:vMerge", NS)
+                merge_value = None
+                if vertical_merge is not None:
+                    merge_value = vertical_merge.get(f"{{{WORD_NS}}}val", "continue")
+                origin = merge_origins.get(grid_column)
+                if merge_value == "continue" and origin is not None:
+                    origin["rowspan"] += 1
+                    grid_column += colspan
+                    continue
+
+                paragraphs = cell.xpath("./w:p", namespaces=NS)
+                fragments = [paragraph_inline_html(paragraph, resolver) for paragraph in paragraphs]
+                texts = [self._paragraph_text(paragraph) for paragraph in paragraphs]
+                alignments = [
+                    paragraph_alignment(paragraph)
+                    for paragraph, text in zip(paragraphs, texts)
+                    if text
+                ]
+                data = {
+                    "text": " | ".join(text for text in texts if text),
+                    "html": "<br>".join(fragment for fragment in fragments if fragment),
+                    "colspan": colspan,
+                    "rowspan": 1,
+                    "align": alignments[0] if alignments else "",
+                }
+                if merge_value == "restart":
+                    merge_origins[grid_column] = data
+                else:
+                    merge_origins.pop(grid_column, None)
+                cells.append(data)
+                grid_column += colspan
+            rows.append(cells)
+        return tuple(tuple(TableCell(**data) for data in cells) for cells in rows)
 
     def _paragraph_text(self, paragraph: etree._Element) -> str:
         parts: list[str] = []
@@ -227,3 +305,12 @@ class DocxParser:
             tag = etree.QName(element).localname
             parts.append(element.text or "" if tag == "t" else " ")
         return clean_word_text("".join(parts))
+
+
+def _int_attribute(node: etree._Element | None, default: int) -> int:
+    if node is None:
+        return default
+    try:
+        return max(int(node.get(f"{{{WORD_NS}}}val", default)), 0) or default
+    except ValueError:
+        return default

@@ -12,7 +12,7 @@ from playwright.sync_api import sync_playwright
 from app.models.article import ArticleTable
 from app.services.docx_parser import ParagraphBlock, ParsedDocument, TableBlock
 from app.services.section_extractor import MAIN_SECTION_TITLES
-from app.services.table_classifier import collect_split_data_table_blocks, is_simple_data_table
+from app.services.table_classifier import collect_split_data_table_blocks
 from app.utils.files import ensure_directory, ensure_within_directory
 from app.utils.strings import clean_word_text, normalize_for_match
 
@@ -209,10 +209,7 @@ def _should_capture_table(block: TableBlock, force_capture: bool = False) -> boo
     if not nonempty_cells:
         return False
 
-    if force_capture:
-        return True
-
-    return not is_simple_data_table(block)
+    return force_capture or block.has_nested_table
 
 
 def _follows_figure_caption(parsed: ParsedDocument, block_index: int) -> bool:

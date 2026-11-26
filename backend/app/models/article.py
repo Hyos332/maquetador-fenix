@@ -75,6 +75,7 @@ class Reference(BaseModel):
 
     number: int = Field(ge=1)
     raw_text: str
+    html: str | None = None
     urls: list[str] = Field(default_factory=list)
 
 
@@ -107,3 +108,9 @@ class Article(BaseModel):
         if self.language == ArticleLanguage.ENGLISH:
             return self.title_en or self.title_es or ""
         return self.title_es or self.title_en or ""
+
+    @property
+    def secondary_title(self) -> str | None:
+        if self.language == ArticleLanguage.ENGLISH:
+            return self.title_es
+        return self.title_en

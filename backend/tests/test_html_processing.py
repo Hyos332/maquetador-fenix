@@ -326,7 +326,7 @@ def test_table_image_extractor_leaves_simple_body_tables_editable() -> None:
     assert result.tables == []
 
 
-def test_table_image_extractor_captures_non_simple_text_boxes() -> None:
+def test_table_image_extractor_keeps_uncaptioned_text_boxes_editable() -> None:
     parsed = ParsedDocument(
         path=Path("article.docx"),
         blocks=(
@@ -348,9 +348,7 @@ def test_table_image_extractor_captures_non_simple_text_boxes() -> None:
 
     result = TableImageExtractor().extract_tables(parsed)
 
-    assert len(result.tables) == 1
-    assert result.tables[0].output_filename == "Table_1.PNG"
-    assert result.tables[0].block_index == 2
+    assert result.tables == []
 
 
 def test_section_extractor_renders_simple_data_tables_as_editable_html() -> None:

@@ -6,10 +6,6 @@ from app.services.docx_parser import DocumentBlock, ParagraphBlock, TableBlock
 from app.utils.strings import clean_word_text, normalize_for_match
 
 
-def is_simple_data_table(block: TableBlock) -> bool:
-    return _is_simple_data_rows(_cleaned_rows(block))
-
-
 def collect_split_data_table_blocks(
     blocks: Sequence[DocumentBlock],
     start_index: int,
@@ -52,9 +48,11 @@ def collect_split_data_table_blocks(
 
 def merge_table_blocks(tables: Sequence[TableBlock]) -> TableBlock:
     first = tables[0]
+    has_cells = all(table.cells for table in tables)
     return TableBlock(
         index=first.index,
         rows=tuple(row for table in tables for row in table.rows),
+        cells=tuple(row for table in tables for row in table.cells) if has_cells else (),
     )
 
 

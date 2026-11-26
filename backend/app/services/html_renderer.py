@@ -47,9 +47,12 @@ class IntermediateHtmlRenderer:
         
         references_html = "\n".join(self._render_reference(reference) for reference in article.references)
         citation_html = self._render_citation(article, journal)
-        secondary_title = article.title_es if article.language == ArticleLanguage.ENGLISH else article.title_en
-        secondary_title_html = self._render_translated_title(secondary_title)
-        abstract_blocks_html = self._render_abstract_blocks(article)
+        primary_abstract_html, secondary_abstract_html = self._render_abstract_blocks(article)
+        secondary_html = "\n".join(
+            block
+            for block in (self._render_translated_title(article.secondary_title), secondary_abstract_html)
+            if block
+        )
         references_title = "References" if article.language == ArticleLanguage.ENGLISH else "Referencias"
 
         return f"""<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
@@ -86,9 +89,11 @@ class IntermediateHtmlRenderer:
         <p>{self._render_dates(article)}</p>
     </div>
 
-    {abstract_blocks_html}
+    {primary_abstract_html}
     <hr>
-    {secondary_title_html}
+    <div>
+    {secondary_html}
+    </div>
     <hr>
     {sections_html}
     <hr>
@@ -207,7 +212,7 @@ class IntermediateHtmlRenderer:
         )
 
     def _render_reference(self, reference: Reference) -> str:
-        return f'<p id="ref-{reference.number}">{escape(reference.raw_text)}</p>'
+        return f'<p id="ref-{reference.number}">{reference.html or escape(reference.raw_text)}</p>'
 
     def _replace_figure_placeholders(
         self,
@@ -270,23 +275,19 @@ class IntermediateHtmlRenderer:
             "</div>"
         )
 
-    def _render_translated_title(self, title_en: str | None) -> str:
-        if not title_en:
+    def _render_translated_title(self, title: str | None) -> str:
+        if not title:
             return ""
         return (
             '<div id="article-title">'
-            f'<p class="center-text"><b>{escape(title_en)}</b></p>'
+            f'<p class="center-text"><b>{escape(title)}</b></p>'
             "</div>"
         )
 
-    def _render_abstract_blocks(self, article: Article) -> str:
+    def _render_abstract_blocks(self, article: Article) -> tuple[str, str]:
         if article.language == ArticleLanguage.ENGLISH:
-            return "\n".join(
-                block for block in (self._render_abstract_en(article), self._render_abstract_es(article)) if block
-            )
-        return "\n".join(
-            block for block in (self._render_abstract_es(article), self._render_abstract_en(article)) if block
-        )
+            return self._render_abstract_en(article), self._render_abstract_es(article)
+        return self._render_abstract_es(article), self._render_abstract_en(article)
 
     def _render_abstract_es(self, article: Article) -> str:
         if not article.abstract_es and not article.keywords_es:
